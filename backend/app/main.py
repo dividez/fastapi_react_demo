@@ -59,7 +59,10 @@ async def convert_word(
 
     notes = []
     if result.messages:
-        notes = [message.__dict__ for message in result.messages]
+        notes = [
+            {"type": message.type, "message": message.message}
+            for message in result.messages
+        ]
 
     return {"html": html_content, "notes": notes}
 
