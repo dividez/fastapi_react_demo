@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tiptap/core": "^2.3.0",
     "@tiptap/extension-link": "^2.3.0",
     "@tiptap/extension-text-style": "^2.3.0",
     "@tiptap/react": "^2.3.0",
