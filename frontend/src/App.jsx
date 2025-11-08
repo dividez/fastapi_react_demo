@@ -1,4 +1,9 @@
 import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import TextStyle from "@tiptap/extension-text-style";
+import Link from "@tiptap/extension-link";
 import clsx from "clsx";
 import WordPreview from "./modules/word-preview/WordPreview.jsx";
 import BilingualEditor from "./modules/bilingual/BilingualEditor.jsx";
@@ -41,6 +46,7 @@ const MODULES = [
 
 export default function App() {
   const [activeModule, setActiveModule] = useState(MODULES[0].id);
+  const [isEditable, setIsEditable] = useState(false);
 
   const activeModuleMeta = useMemo(
     () => MODULES.find((module) => module.id === activeModule) ?? MODULES[0],
