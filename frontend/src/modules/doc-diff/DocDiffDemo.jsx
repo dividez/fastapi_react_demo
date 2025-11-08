@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextStyle from "@tiptap/extension-text-style";
@@ -91,7 +91,6 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
   const [modifiedFile, setModifiedFile] = useState(null);
   const [originalHtml, setOriginalHtml] = useState(`<p>${emptyPlaceholder}</p>`);
   const [modifiedHtml, setModifiedHtml] = useState(`<p>${emptyPlaceholder}</p>`);
-  const [diffHtml, setDiffHtml] = useState("<p>待生成差异视图。</p>");
   const [diffItems, setDiffItems] = useState([]);
   const [diffFilter, setDiffFilter] = useState("all");
   const [selectedDiffId, setSelectedDiffId] = useState("");
@@ -100,19 +99,22 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
   const [modifiedNotes, setModifiedNotes] = useState([]);
   const [isComparing, setIsComparing] = useState(false);
   const [error, setError] = useState("");
-
-  const diffContainerRef = useRef(null);
+  const [diffSearch, setDiffSearch] = useState("");
+  const [visitedDiffIds, setVisitedDiffIds] = useState(() => new Set());
+  const [hoveredDiffId, setHoveredDiffId] = useState("");
 
   const originalEditor = useReadonlyEditor(originalHtml);
   const modifiedEditor = useReadonlyEditor(modifiedHtml);
 
   useEffect(() => {
     if (!originalFile || !modifiedFile) {
-      setDiffHtml("<p>待生成差异视图。</p>");
       setDiffItems([]);
       setSelectedDiffId("");
       setDiffFilter("all");
       setStats(null);
+      setDiffSearch("");
+      setVisitedDiffIds(new Set());
+      setHoveredDiffId("");
     }
   }, [originalFile, modifiedFile]);
 
@@ -128,10 +130,12 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
     setOriginalHtml(`<p>原始文档：${file.name}，请继续上传对比文档。</p>`);
     setOriginalNotes([]);
     setStats(null);
-    setDiffHtml("<p>待生成差异视图。</p>");
     setDiffItems([]);
     setSelectedDiffId("");
     setDiffFilter("all");
+    setDiffSearch("");
+    setVisitedDiffIds(new Set());
+    setHoveredDiffId("");
     setError("");
     event.target.value = "";
   };
@@ -143,10 +147,12 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
     setModifiedHtml(`<p>对比文档：${file.name}，点击生成对比。</p>`);
     setModifiedNotes([]);
     setStats(null);
-    setDiffHtml("<p>待生成差异视图。</p>");
     setDiffItems([]);
     setSelectedDiffId("");
     setDiffFilter("all");
+    setDiffSearch("");
+    setVisitedDiffIds(new Set());
+    setHoveredDiffId("");
     setError("");
     event.target.value = "";
   };
@@ -180,17 +186,21 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
       const payload = await response.json();
       setOriginalHtml(payload.original_html || `<p>${emptyPlaceholder}</p>`);
       setModifiedHtml(payload.modified_html || `<p>${emptyPlaceholder}</p>`);
-      setDiffHtml(payload.diff_html || "<p>未检测到差异。</p>");
       setDiffItems(payload.diff_items ?? []);
       setDiffFilter("all");
       setSelectedDiffId("");
       setStats(payload.stats ?? null);
       setOriginalNotes(payload.original_notes ?? []);
       setModifiedNotes(payload.modified_notes ?? []);
+      setDiffSearch("");
+      setVisitedDiffIds(new Set());
+      setHoveredDiffId("");
     } catch (err) {
       setError(err.message || "对比失败，请稍后重试。");
       setDiffItems([]);
       setSelectedDiffId("");
+      setVisitedDiffIds(new Set());
+      setHoveredDiffId("");
     } finally {
       setIsComparing(false);
     }
@@ -239,9 +249,47 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
   }, [diffItems]);
 
   const filteredDiffItems = useMemo(() => {
-    if (diffFilter === "all") return diffItems;
-    return diffItems.filter((item) => item.type === diffFilter);
-  }, [diffItems, diffFilter]);
+    const itemsByFilter =
+      diffFilter === "all"
+        ? diffItems
+        : diffItems.filter((item) => item.type === diffFilter);
+
+    const query = diffSearch.trim().toLowerCase();
+    if (!query) {
+      return itemsByFilter;
+    }
+
+    return itemsByFilter.filter((item) => {
+      const candidates = [
+        item.summary,
+        item.location,
+        item.original_text,
+        item.modified_text,
+      ];
+      return candidates.some((value) =>
+        value ? value.toLowerCase().includes(query) : false
+      );
+    });
+  }, [diffItems, diffFilter, diffSearch]);
+
+  const statEntries = useMemo(
+    () => [
+      { key: "insert", label: "新增", value: stats?.inserted_tokens ?? 0 },
+      { key: "replace", label: "修改", value: stats?.replaced_tokens ?? 0 },
+      { key: "delete", label: "删除", value: stats?.deleted_tokens ?? 0 },
+    ],
+    [stats]
+  );
+
+  const selectedDiffIndex = useMemo(
+    () => filteredDiffItems.findIndex((item) => item.id === selectedDiffId),
+    [filteredDiffItems, selectedDiffId]
+  );
+
+  const hasFilteredDiffs = filteredDiffItems.length > 0;
+  const hasDiffItems = diffItems.length > 0;
+  const currentDiffPosition =
+    selectedDiffIndex >= 0 ? selectedDiffIndex + 1 : 0;
 
   const scrollToEditorMarker = useCallback((editor, diffId) => {
     const viewDom = editor?.view?.dom;
@@ -252,34 +300,34 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
     return true;
   }, []);
 
-  const scrollToDiffMarker = useCallback(
-    (diffId) => {
-      const container = diffContainerRef.current;
-      if (!container) return false;
-      const target = container.querySelector(
-        `[data-diff-id="${diffId}"]`
-      );
-      if (!target) return false;
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      return true;
-    },
-    [diffContainerRef]
-  );
+  const markDiffAsVisited = useCallback((diffId) => {
+    if (!diffId) return;
+    setVisitedDiffIds((previous) => {
+      if (previous.has(diffId)) return previous;
+      const next = new Set(previous);
+      next.add(diffId);
+      return next;
+    });
+  }, []);
+
+  const handleDiffSearchChange = useCallback((event) => {
+    setDiffSearch(event.target.value);
+  }, []);
 
   const handleDiffItemClick = useCallback(
     (item) => {
       setSelectedDiffId(item.id);
-      if (!scrollToDiffMarker(item.id)) {
-        const triedOriginal =
-          item.type !== "insert" && scrollToEditorMarker(originalEditor, item.id);
-        const triedModified =
-          item.type !== "delete" && scrollToEditorMarker(modifiedEditor, item.id);
-        if (!triedOriginal && !triedModified) {
-          scrollToDiffMarker(item.id);
-        }
+      markDiffAsVisited(item.id);
+      const scrollers = [];
+      if (item.type !== "insert") {
+        scrollers.push(() => scrollToEditorMarker(originalEditor, item.id));
       }
+      if (item.type !== "delete") {
+        scrollers.push(() => scrollToEditorMarker(modifiedEditor, item.id));
+      }
+      scrollers.some((fn) => fn());
     },
-    [modifiedEditor, originalEditor, scrollToDiffMarker, scrollToEditorMarker]
+    [markDiffAsVisited, modifiedEditor, originalEditor, scrollToEditorMarker]
   );
 
   const handleDiffItemKeyDown = useCallback(
@@ -296,15 +344,47 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
     (event, item, target) => {
       event.stopPropagation();
       setSelectedDiffId(item.id);
+      markDiffAsVisited(item.id);
       if (target === "original") {
         scrollToEditorMarker(originalEditor, item.id);
-      } else if (target === "modified") {
-        scrollToEditorMarker(modifiedEditor, item.id);
       } else {
-        scrollToDiffMarker(item.id);
+        scrollToEditorMarker(modifiedEditor, item.id);
       }
     },
-    [modifiedEditor, originalEditor, scrollToDiffMarker, scrollToEditorMarker]
+    [markDiffAsVisited, modifiedEditor, originalEditor, scrollToEditorMarker]
+  );
+
+  const handleDiffItemMouseEnter = useCallback((diffId) => {
+    setHoveredDiffId(diffId);
+  }, []);
+
+  const handleDiffItemMouseLeave = useCallback(() => {
+    setHoveredDiffId("");
+  }, []);
+
+  const handleNavigate = useCallback(
+    (direction) => {
+      if (!filteredDiffItems.length) return;
+      let nextIndex = filteredDiffItems.findIndex(
+        (item) => item.id === selectedDiffId
+      );
+      if (nextIndex === -1) {
+        nextIndex = direction > 0 ? 0 : filteredDiffItems.length - 1;
+      } else {
+        nextIndex += direction;
+        if (nextIndex < 0) {
+          nextIndex = filteredDiffItems.length - 1;
+        } else if (nextIndex >= filteredDiffItems.length) {
+          nextIndex = 0;
+        }
+      }
+
+      const target = filteredDiffItems[nextIndex];
+      if (target) {
+        handleDiffItemClick(target);
+      }
+    },
+    [filteredDiffItems, handleDiffItemClick, selectedDiffId]
   );
 
   useEffect(() => {
@@ -322,8 +402,24 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
 
     toggleActive(originalEditor?.view?.dom);
     toggleActive(modifiedEditor?.view?.dom);
-    toggleActive(diffContainerRef.current);
-  }, [selectedDiffId, originalEditor, modifiedEditor, diffHtml]);
+  }, [selectedDiffId, originalEditor, modifiedEditor]);
+
+  useEffect(() => {
+    const toggleHover = (root) => {
+      if (!root) return;
+      const markers = root.querySelectorAll("[data-diff-id]");
+      markers.forEach((marker) => {
+        if (hoveredDiffId && marker.dataset.diffId === hoveredDiffId) {
+          marker.classList.add("diff-marker--hover");
+        } else {
+          marker.classList.remove("diff-marker--hover");
+        }
+      });
+    };
+
+    toggleHover(originalEditor?.view?.dom);
+    toggleHover(modifiedEditor?.view?.dom);
+  }, [hoveredDiffId, originalEditor, modifiedEditor]);
 
   const renderDiffText = useCallback((value) => {
     const segments = createPreviewSegments(value);
@@ -397,6 +493,27 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
       <main className="page__content doc-diff">
         <div className="doc-diff__layout">
           <div className="doc-diff__main">
+            {hasDiffItems && (
+              <section className="doc-diff__overview">
+                <div className="doc-diff__overview-total">
+                  共 <strong>{diffItems.length}</strong> 处差异
+                </div>
+                <ul className="doc-diff__stat-list">
+                  {statEntries.map((entry) => (
+                    <li
+                      key={entry.key}
+                      className={clsx(
+                        "doc-diff__stat",
+                        `doc-diff__stat--${entry.key}`
+                      )}
+                    >
+                      <span className="doc-diff__stat-label">{entry.label}</span>
+                      <span className="doc-diff__stat-value">{entry.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             <section className="doc-diff__panes">
               <div className="doc-diff__pane">
                 <div className="doc-diff__pane-header">原始文档</div>
@@ -427,16 +544,6 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
               </div>
             </section>
 
-            <section className="doc-diff__result">
-              <header className="doc-diff__result-header">差异高亮</header>
-              <div
-                ref={diffContainerRef}
-                className={clsx("doc-diff__diff-html", {
-                  "doc-diff__diff-html--loading": isComparing,
-                })}
-                dangerouslySetInnerHTML={{ __html: diffHtml }}
-              />
-            </section>
           </div>
 
           <aside className="doc-diff__sidebar">
@@ -444,6 +551,40 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
               <span>差异列表</span>
               <span className="doc-diff__sidebar-count">{diffItems.length}</span>
             </header>
+            <div className="doc-diff__sidebar-toolbar">
+              <div className="doc-diff__search">
+                <input
+                  type="search"
+                  className="doc-diff__search-input"
+                  value={diffSearch}
+                  onChange={handleDiffSearchChange}
+                  placeholder="搜索差异或定位"
+                />
+              </div>
+              <div className="doc-diff__navigator">
+                <button
+                  type="button"
+                  className="doc-diff__navigator-button"
+                  onClick={() => handleNavigate(-1)}
+                  disabled={!hasFilteredDiffs}
+                >
+                  上一处
+                </button>
+                <button
+                  type="button"
+                  className="doc-diff__navigator-button"
+                  onClick={() => handleNavigate(1)}
+                  disabled={!hasFilteredDiffs}
+                >
+                  下一处
+                </button>
+              </div>
+              {hasFilteredDiffs && (
+                <div className="doc-diff__navigator-progress">
+                  {currentDiffPosition}/{filteredDiffItems.length}
+                </div>
+              )}
+            </div>
             <div className="doc-diff__filters">
               {DIFF_FILTERS.map((filter) => (
                 <button
@@ -463,14 +604,17 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
               ))}
             </div>
             <div className="doc-diff__diff-list-wrapper">
-              {filteredDiffItems.length ? (
+              {hasFilteredDiffs ? (
                 <ul className="doc-diff__diff-list">
                   {filteredDiffItems.map((item, index) => (
                     <li
                       key={item.id}
                       className={clsx("doc-diff__diff-item", {
                         "doc-diff__diff-item--active": selectedDiffId === item.id,
+                        "doc-diff__diff-item--visited": visitedDiffIds.has(item.id),
                       })}
+                      onMouseEnter={() => handleDiffItemMouseEnter(item.id)}
+                      onMouseLeave={handleDiffItemMouseLeave}
                     >
                       <div
                         role="button"
@@ -492,6 +636,25 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
                           <span className="doc-diff__diff-item-index">
                             #{index + 1}
                           </span>
+                        </div>
+                        <div className="doc-diff__diff-item-meta">
+                          <span
+                            className="doc-diff__diff-item-location"
+                            title={item.location || "全文"}
+                          >
+                            {item.location || "全文"}
+                          </span>
+                          <span
+                            className={clsx("doc-diff__diff-item-status", {
+                              "doc-diff__diff-item-status--viewed":
+                                visitedDiffIds.has(item.id),
+                            })}
+                          >
+                            {visitedDiffIds.has(item.id) ? "已查看" : "未查看"}
+                          </span>
+                        </div>
+                        <div className="doc-diff__diff-item-summary">
+                          {item.summary}
                         </div>
                         <div className="doc-diff__diff-item-body">
                           {item.type === "replace" ? (
@@ -540,13 +703,6 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
                             对比稿
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="doc-diff__diff-item-action"
-                          onClick={(event) => handleJump(event, item, "diff")}
-                        >
-                          差异视图
-                        </button>
                       </div>
                     </li>
                   ))}
