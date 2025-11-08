@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextStyle from "@tiptap/extension-text-style";
@@ -48,7 +49,106 @@ const editorExtensions = [
 ];
 
 const initialPlaceholder =
-  "上传 .docx 合同文件后即可在下方预览。页面会尽力还原 Word 的排版与格式。";
+  "上传 .docx 合同文件后即可在下方预览。页面会尽力还原 Word 的排版与格式，并支持后续细节编辑。";
+
+function ToolbarButton({ active, disabled, label, onClick }) {
+  return (
+    <button
+      type="button"
+      className={clsx("toolbar-button", { "toolbar-button--active": active })}
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={active}
+    >
+      {label}
+    </button>
+  );
+}
+
+function EditorToolbar({ editor, disabled }) {
+  if (!editor) {
+    return null;
+  }
+
+  const groups = [
+    {
+      label: "样式",
+      items: [
+        {
+          label: "正文",
+          isActive: () => editor.isActive("paragraph"),
+          handler: () => editor.chain().focus().setParagraph().run(),
+        },
+        {
+          label: "标题 1",
+          isActive: () => editor.isActive("heading", { level: 1 }),
+          handler: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+        },
+        {
+          label: "标题 2",
+          isActive: () => editor.isActive("heading", { level: 2 }),
+          handler: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+        },
+        {
+          label: "标题 3",
+          isActive: () => editor.isActive("heading", { level: 3 }),
+          handler: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+        },
+      ],
+    },
+    {
+      label: "强调",
+      items: [
+        {
+          label: "加粗",
+          isActive: () => editor.isActive("bold"),
+          handler: () => editor.chain().focus().toggleBold().run(),
+        },
+        {
+          label: "斜体",
+          isActive: () => editor.isActive("italic"),
+          handler: () => editor.chain().focus().toggleItalic().run(),
+        },
+      ],
+    },
+    {
+      label: "列表",
+      items: [
+        {
+          label: "编号列表",
+          isActive: () => editor.isActive("orderedList"),
+          handler: () => editor.chain().focus().toggleOrderedList().run(),
+        },
+        {
+          label: "项目符号",
+          isActive: () => editor.isActive("bulletList"),
+          handler: () => editor.chain().focus().toggleBulletList().run(),
+        },
+      ],
+    },
+  ];
+
+  return (
+    <div className="editor-toolbar" aria-label="编辑工具栏">
+      {groups.map((group) => (
+        <div key={group.label} className="editor-toolbar__group">
+          <span className="editor-toolbar__label">{group.label}</span>
+          <div className="editor-toolbar__actions">
+            {group.items.map((item) => (
+              <ToolbarButton
+                key={item.label}
+                label={item.label}
+                active={item.isActive()}
+                disabled={disabled}
+                onClick={item.handler}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const BILINGUAL_MOCK_SEGMENTS = [
   {
@@ -137,6 +237,7 @@ export default function App() {
   const sourceColumnRef = useRef(null);
   const targetColumnRef = useRef(null);
   const syncLockRef = useRef(false);
+  const [isEditable, setIsEditable] = useState(false);
 
   const activeModuleMeta = useMemo(
     () => MODULES.find((module) => module.id === activeModule) ?? MODULES[0],
@@ -147,22 +248,47 @@ export default function App() {
   const isBilingual = activeModuleMeta.id === "bilingual-editor";
 
   const editor = useEditor({
-    editable: false,
+    editable: isEditable,
     extensions: editorExtensions,
     content: html,
     parseOptions: {
       preserveWhitespace: "full",
     },
+    onUpdate: ({ editor: currentEditor }) => {
+      const content = currentEditor.getHTML();
+      setHtml(content);
+    },
   });
 
   useEffect(() => {
-    if (editor && html) {
-      editor.commands.setContent(html, false, {
-        preserveWhitespace: "full",
-      });
-      editor.commands.scrollIntoView();
-    }
+    if (!editor || !html) return;
+    if (editor.getHTML() === html) return;
+
+    editor.commands.setContent(html, false, {
+      preserveWhitespace: "full",
+    });
+    editor.commands.scrollIntoView();
   }, [editor, html]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(isEditable);
+  }, [editor, isEditable]);
+
+  const handleToggleEdit = useCallback(() => {
+    setIsEditable((prev) => {
+      const next = !prev;
+      if (editor) {
+        editor.setEditable(next);
+        if (next) {
+          editor.commands.focus("end");
+        } else {
+          editor.commands.blur();
+        }
+      }
+      return next;
+    });
+  }, [editor]);
 
   const handleUpload = async (event) => {
     const file = event.target.files?.[0];
@@ -186,7 +312,14 @@ export default function App() {
       }
 
       const payload = await response.json();
-      setHtml(payload.html || "<p>未能读取到正文内容。</p>");
+      const nextHtml = payload.html || "<p>未能读取到正文内容。</p>";
+      setHtml(nextHtml);
+      if (editor) {
+        editor.commands.setContent(nextHtml, false, {
+          preserveWhitespace: "full",
+        });
+        editor.commands.focus("start");
+      }
       setNotes(payload.notes ?? []);
     } catch (err) {
       setError(err.message || "上传失败，请稍后再试。");
@@ -571,6 +704,24 @@ export default function App() {
                 />
                 {isBilingualTranslating ? "处理中..." : "导入合同"}
               </label>
+              <div className="page__actions">
+                <button
+                  type="button"
+                  className={clsx("edit-toggle", { "edit-toggle--active": isEditable })}
+                  onClick={handleToggleEdit}
+                >
+                  {isEditable ? "退出编辑" : "开启编辑"}
+                </button>
+                <label className="upload-button">
+                  <input
+                    type="file"
+                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={handleUpload}
+                    disabled={isLoading}
+                  />
+                  {isLoading ? "处理中..." : "导入 Word"}
+                </label>
+              </div>
             ) : (
               <div className="module-status">功能设计中，欢迎关注更新。</div>
             )}
@@ -591,6 +742,7 @@ export default function App() {
           <main className="page__content">
             {isWordPreview ? (
               <div className="paper-shadow">
+                <EditorToolbar editor={editor} disabled={!isEditable} />
                 <EditorContent editor={editor} className={tiptapClassName} />
               </div>
             ) : isBilingual ? (
