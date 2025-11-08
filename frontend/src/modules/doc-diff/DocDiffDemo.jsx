@@ -74,6 +74,11 @@ function useReadonlyEditor(content) {
     parseOptions: {
       preserveWhitespace: "full",
     },
+    editorProps: {
+      attributes: {
+        class: "contract-sheet",
+      },
+    },
   });
 
   useEffect(() => {
@@ -81,7 +86,10 @@ function useReadonlyEditor(content) {
     editor.commands.setContent(content, false, {
       preserveWhitespace: "full",
     });
-    editor.commands.scrollIntoView();
+    // 确保差异标记正确显示
+    setTimeout(() => {
+      editor.commands.scrollIntoView();
+    }, 100);
   }, [editor, content]);
 
   return editor;
@@ -355,25 +363,54 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
       const root = editor?.view?.dom;
       if (!root) return;
 
+      // 先清除所有块级样式
       root.querySelectorAll(BLOCK_NODE_SELECTOR).forEach((element) => {
         baseClasses.forEach((className) => {
           element.classList.remove(className);
         });
       });
 
+      // 确保所有差异标记都有正确的 class
       root.querySelectorAll("[data-diff-id]").forEach((marker) => {
+        const diffType = marker.getAttribute("data-diff-type");
+        const diffRole = marker.getAttribute("data-diff-role");
+        
+        // 确保标记有正确的 class
+        if (!marker.classList.contains("diff-marker")) {
+          marker.classList.add("diff-marker");
+        }
+        if (diffType && !marker.classList.contains(`diff-marker--${diffType}`)) {
+          marker.classList.add(`diff-marker--${diffType}`);
+        }
+        if (diffRole && !marker.classList.contains(`diff-marker--${diffRole}`)) {
+          marker.classList.add(`diff-marker--${diffRole}`);
+        }
+        
+        // 检查是否是占位符
+        const isPlaceholder = marker.getAttribute("data-diff-placeholder") === "true";
+        if (isPlaceholder && !marker.classList.contains("diff-marker--placeholder")) {
+          marker.classList.add("diff-marker--placeholder");
+        } else if (!isPlaceholder && !marker.classList.contains("diff-marker--with-pill")) {
+          marker.classList.add("diff-marker--with-pill");
+        }
+
+        // 为包含差异标记的块添加样式
         const block = marker.closest(BLOCK_NODE_SELECTOR);
         if (!block) return;
         block.classList.add("diff-block", `diff-block--${role}`);
-        const type = marker.dataset?.diffType;
-        if (type) {
-          block.classList.add(`diff-block--${type}`);
+        if (diffType) {
+          block.classList.add(`diff-block--${diffType}`);
         }
       });
     };
 
-    applyBlockHighlights(originalEditor, "original");
-    applyBlockHighlights(modifiedEditor, "modified");
+    // 延迟执行以确保 DOM 已更新
+    const timer = setTimeout(() => {
+      applyBlockHighlights(originalEditor, "original");
+      applyBlockHighlights(modifiedEditor, "modified");
+    }, 50);
+
+    return () => clearTimeout(timer);
   }, [originalEditor, modifiedEditor, diffItems, originalHtml, modifiedHtml]);
 
   const focusNextDiff = useCallback(
@@ -592,7 +629,14 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
           <div className="doc-diff__main">
             <section className="doc-diff__panes">
               <div className="doc-diff__pane">
-                <div className="doc-diff__pane-header">原始文档</div>
+                <div className="doc-diff__pane-header">
+                  原始文档
+                  {hasDiffs && (
+                    <span className="doc-diff__pane-meta">
+                      {diffCounts.delete + diffCounts.replace} 处差异
+                    </span>
+                  )}
+                </div>
                 <div className="paper-shadow">
                   <EditorContent
                     editor={originalEditor}
@@ -605,8 +649,10 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
               <div className="doc-diff__pane">
                 <div className="doc-diff__pane-header">
                   修改稿
-                  {statsSummary && (
-                    <span className="doc-diff__pane-meta">{statsSummary}</span>
+                  {hasDiffs && (
+                    <span className="doc-diff__pane-meta">
+                      {diffCounts.insert + diffCounts.replace} 处差异
+                    </span>
                   )}
                 </div>
                 <div className="paper-shadow">

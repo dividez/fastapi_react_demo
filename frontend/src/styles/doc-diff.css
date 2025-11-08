@@ -73,6 +73,18 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
+  position: relative;
+}
+
+.doc-diff__pane-header::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(82, 102, 255, 0.3), transparent);
+  border-radius: 2px;
 }
 
 .doc-diff__pane-meta {
@@ -415,33 +427,59 @@
 
 .diff-insert,
 .diff-marker--insert {
-  background: rgba(64, 191, 114, 0.28);
+  background: linear-gradient(135deg, rgba(64, 191, 114, 0.35), rgba(34, 197, 94, 0.3));
   border-radius: 4px;
-  padding: 0 2px;
+  padding: 2px 4px;
+  border: 1px solid rgba(64, 191, 114, 0.4);
+  font-weight: 500;
+  position: relative;
 }
 
 .diff-delete,
 .diff-marker--delete {
-  background: rgba(220, 76, 100, 0.28);
+  background: linear-gradient(135deg, rgba(220, 76, 100, 0.35), rgba(239, 68, 68, 0.3));
   border-radius: 4px;
-  padding: 0 2px;
+  padding: 2px 4px;
+  border: 1px solid rgba(220, 76, 100, 0.4);
   text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(220, 76, 100, 0.8);
+  font-weight: 500;
+  position: relative;
 }
 
 .diff-marker {
   border-radius: 4px;
-  padding: 0 2px;
+  padding: 2px 4px;
+  position: relative;
+  transition: all 0.2s ease;
 }
 
 .diff-marker--placeholder {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0.85em;
-  min-height: 1.35em;
-  padding: 0 6px;
-  color: transparent;
-  box-shadow: inset 0 0 0 1px rgba(82, 102, 255, 0.08);
+  display: inline-block;
+  width: 1em;
+  height: 1.2em;
+  min-width: 1em;
+  min-height: 1.2em;
+  border-radius: 4px;
+  vertical-align: baseline;
+  position: relative;
+  margin: 0 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* 新增类型的占位符使用绿色主题 */
+.diff-marker--placeholder.diff-marker--insert {
+  background: rgba(64, 191, 114, 0.4);
+  border: 2px solid rgba(64, 191, 114, 0.8);
+  box-shadow: 0 1px 4px rgba(64, 191, 114, 0.4);
+}
+
+/* 删除类型的占位符使用红色主题 */
+.diff-marker--placeholder.diff-marker--delete {
+  background: rgba(220, 76, 100, 0.4);
+  border: 2px solid rgba(220, 76, 100, 0.8);
+  box-shadow: 0 1px 4px rgba(220, 76, 100, 0.4);
 }
 
 .diff-marker--with-pill {
@@ -451,11 +489,15 @@
 }
 
 .diff-marker--replace.diff-marker--original {
-  background: rgba(255, 163, 72, 0.26);
+  background: linear-gradient(135deg, rgba(255, 163, 72, 0.35), rgba(251, 146, 60, 0.3));
+  border: 1px solid rgba(255, 163, 72, 0.45);
+  font-weight: 500;
 }
 
 .diff-marker--replace.diff-marker--modified {
-  background: rgba(64, 156, 255, 0.22);
+  background: linear-gradient(135deg, rgba(64, 156, 255, 0.35), rgba(59, 130, 246, 0.3));
+  border: 1px solid rgba(64, 156, 255, 0.45);
+  font-weight: 500;
 }
 
 .contract-sheet [data-diff-number]::before {
@@ -463,37 +505,47 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.1;
-  padding: 2px 6px;
-  margin-right: 6px;
-  border-radius: 999px;
-  background: rgba(82, 102, 255, 0.16);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 3px 8px;
+  margin-right: 8px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(82, 102, 255, 0.2), rgba(82, 102, 255, 0.15));
   color: #1f2f80;
-  letter-spacing: 0.02em;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+  letter-spacing: 0.03em;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.3);
   white-space: nowrap;
+  border: 1px solid rgba(82, 102, 255, 0.25);
+  text-transform: uppercase;
 }
 
 .contract-sheet [data-diff-number][data-diff-type="insert"]::before {
-  background: rgba(64, 191, 114, 0.28);
+  background: linear-gradient(135deg, rgba(64, 191, 114, 0.35), rgba(34, 197, 94, 0.25));
   color: #0f5132;
+  border-color: rgba(64, 191, 114, 0.4);
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .contract-sheet [data-diff-number][data-diff-type="delete"]::before {
-  background: rgba(220, 76, 100, 0.28);
+  background: linear-gradient(135deg, rgba(220, 76, 100, 0.35), rgba(239, 68, 68, 0.25));
   color: #991b1b;
+  border-color: rgba(220, 76, 100, 0.4);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .contract-sheet [data-diff-number][data-diff-type="replace"][data-diff-role="original"]::before {
-  background: rgba(255, 163, 72, 0.28);
+  background: linear-gradient(135deg, rgba(255, 163, 72, 0.35), rgba(251, 146, 60, 0.25));
   color: #92400e;
+  border-color: rgba(255, 163, 72, 0.4);
+  box-shadow: 0 2px 4px rgba(251, 146, 60, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .contract-sheet [data-diff-number][data-diff-type="replace"][data-diff-role="modified"]::before {
-  background: rgba(64, 156, 255, 0.24);
+  background: linear-gradient(135deg, rgba(64, 156, 255, 0.35), rgba(59, 130, 246, 0.25));
   color: #1d4ed8;
+  border-color: rgba(64, 156, 255, 0.4);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .contract-sheet [data-diff-placeholder="true"]::before {
@@ -505,13 +557,39 @@
 }
 
 .diff-marker--active {
-  box-shadow: 0 0 0 2px rgba(82, 102, 255, 0.6);
-  background: rgba(82, 102, 255, 0.25) !important;
+  box-shadow: 0 0 0 3px rgba(82, 102, 255, 0.5), 0 2px 8px rgba(82, 102, 255, 0.3) !important;
+  background: rgba(82, 102, 255, 0.3) !important;
   color: #10194a;
+  transform: scale(1.02);
+  z-index: 10;
+  position: relative;
+}
+
+.diff-marker--active.diff-marker--insert {
+  background: linear-gradient(135deg, rgba(64, 191, 114, 0.45), rgba(34, 197, 94, 0.4)) !important;
+  box-shadow: 0 0 0 3px rgba(64, 191, 114, 0.5), 0 2px 8px rgba(16, 185, 129, 0.3) !important;
+}
+
+.diff-marker--active.diff-marker--delete {
+  background: linear-gradient(135deg, rgba(220, 76, 100, 0.45), rgba(239, 68, 68, 0.4)) !important;
+  box-shadow: 0 0 0 3px rgba(220, 76, 100, 0.5), 0 2px 8px rgba(239, 68, 68, 0.3) !important;
+}
+
+.diff-marker--active.diff-marker--replace.diff-marker--original {
+  background: linear-gradient(135deg, rgba(255, 163, 72, 0.45), rgba(251, 146, 60, 0.4)) !important;
+  box-shadow: 0 0 0 3px rgba(255, 163, 72, 0.5), 0 2px 8px rgba(251, 146, 60, 0.3) !important;
+}
+
+.diff-marker--active.diff-marker--replace.diff-marker--modified {
+  background: linear-gradient(135deg, rgba(64, 156, 255, 0.45), rgba(59, 130, 246, 0.4)) !important;
+  box-shadow: 0 0 0 3px rgba(64, 156, 255, 0.5), 0 2px 8px rgba(59, 130, 246, 0.3) !important;
 }
 
 .diff-marker--hovered {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5), 0 1px 4px rgba(99, 102, 241, 0.2);
+  transform: scale(1.01);
+  z-index: 5;
+  position: relative;
 }
 
 .doc-diff__diff-html [data-diff-id] {
@@ -524,44 +602,80 @@
 }
 
 .contract-sheet [data-diff-id] {
-  transition: box-shadow 0.2s ease, background 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+}
+
+.contract-sheet [data-diff-id]:hover:not(.diff-marker--active) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
 }
 
 .contract-sheet .diff-block {
   position: relative;
-  border-left: 4px solid transparent;
+  border-left: 5px solid transparent;
   border-radius: 12px;
-  padding: 6px 12px;
-  margin: 2px 0;
-  transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  padding: 8px 14px;
+  margin: 4px 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background-clip: padding-box;
+}
+
+.contract-sheet .diff-block:hover:not(.diff-block--active):not(.diff-block--hovered) {
+  transform: translateX(1px);
+  box-shadow: inset 0 0 0 1px currentColor, 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .contract-sheet .diff-block--original.diff-block--delete {
-  background: rgba(220, 76, 100, 0.18);
-  border-left-color: rgba(220, 76, 100, 0.52);
+  background: linear-gradient(90deg, rgba(220, 76, 100, 0.22), rgba(220, 76, 100, 0.12));
+  border-left-color: rgba(220, 76, 100, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(220, 76, 100, 0.15);
 }
 
 .contract-sheet .diff-block--modified.diff-block--insert {
-  background: rgba(64, 191, 114, 0.18);
-  border-left-color: rgba(64, 191, 114, 0.52);
+  background: linear-gradient(90deg, rgba(64, 191, 114, 0.22), rgba(64, 191, 114, 0.12));
+  border-left-color: rgba(64, 191, 114, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(64, 191, 114, 0.15);
 }
 
 .contract-sheet .diff-block--original.diff-block--replace {
-  background: rgba(255, 163, 72, 0.2);
-  border-left-color: rgba(255, 163, 72, 0.55);
+  background: linear-gradient(90deg, rgba(255, 163, 72, 0.25), rgba(255, 163, 72, 0.15));
+  border-left-color: rgba(255, 163, 72, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(255, 163, 72, 0.15);
 }
 
 .contract-sheet .diff-block--modified.diff-block--replace {
-  background: rgba(64, 156, 255, 0.2);
-  border-left-color: rgba(64, 156, 255, 0.48);
+  background: linear-gradient(90deg, rgba(64, 156, 255, 0.25), rgba(64, 156, 255, 0.15));
+  border-left-color: rgba(64, 156, 255, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(64, 156, 255, 0.15);
 }
 
 .contract-sheet .diff-block--active {
-  box-shadow: 0 0 0 2px rgba(82, 102, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(82, 102, 255, 0.5), 0 4px 12px rgba(82, 102, 255, 0.25), inset 0 0 0 1px rgba(82, 102, 255, 0.2);
+  transform: translateX(2px);
+  border-left-width: 6px;
+}
+
+.contract-sheet .diff-block--active.diff-block--original.diff-block--delete {
+  box-shadow: 0 0 0 3px rgba(220, 76, 100, 0.5), 0 4px 12px rgba(220, 76, 100, 0.25), inset 0 0 0 1px rgba(220, 76, 100, 0.2);
+}
+
+.contract-sheet .diff-block--active.diff-block--modified.diff-block--insert {
+  box-shadow: 0 0 0 3px rgba(64, 191, 114, 0.5), 0 4px 12px rgba(64, 191, 114, 0.25), inset 0 0 0 1px rgba(64, 191, 114, 0.2);
+}
+
+.contract-sheet .diff-block--active.diff-block--original.diff-block--replace {
+  box-shadow: 0 0 0 3px rgba(255, 163, 72, 0.5), 0 4px 12px rgba(255, 163, 72, 0.25), inset 0 0 0 1px rgba(255, 163, 72, 0.2);
+}
+
+.contract-sheet .diff-block--active.diff-block--modified.diff-block--replace {
+  box-shadow: 0 0 0 3px rgba(64, 156, 255, 0.5), 0 4px 12px rgba(64, 156, 255, 0.25), inset 0 0 0 1px rgba(64, 156, 255, 0.2);
 }
 
 .contract-sheet .diff-block--hovered:not(.diff-block--active) {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4), 0 2px 8px rgba(99, 102, 241, 0.15), inset 0 0 0 1px rgba(99, 102, 241, 0.1);
+  transform: translateX(1px);
 }
 
 .doc-diff__summary {

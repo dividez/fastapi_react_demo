@@ -516,6 +516,12 @@ def _build_diff(
             original_location = _summarize_location(
                 original_soup, original_node_infos, i1
             )
+            # 在 modified 中找到对应的位置（删除后应该插入占位符的位置）
+            # 由于是删除，modified 中对应的位置是 j1（等于 i1 在原始序列中的位置）
+            # 但我们需要在 modified 的对应位置插入占位符
+            modified_location = _summarize_location(
+                modified_soup, modified_node_infos, j1 if j1 < len(modified_tokens) else max(0, len(modified_tokens) - 1)
+            )
             diff_parts.append(
                 f'<del class="diff-delete" data-diff-id="{diff_id}">{deleted_escaped}</del>'
             )
@@ -526,6 +532,7 @@ def _build_diff(
                     original_text=deleted_raw,
                     modified_text="",
                     original_location=original_location,
+                    modified_location=modified_location,
                 )
             )
             highlight_map["original"].append(
@@ -537,6 +544,19 @@ def _build_diff(
                     "end": i2,
                     "label": DIFF_TYPE_LABELS["delete"],
                     "number": diff_number,
+                }
+            )
+            # 在 modified 中添加占位符标记
+            highlight_map["modified"].append(
+                {
+                    "id": diff_id,
+                    "type": "delete",
+                    "role": "modified",
+                    "start": j1,
+                    "end": j1,
+                    "label": DIFF_TYPE_LABELS["delete"],
+                    "number": diff_number,
+                    "placeholder": True,
                 }
             )
         elif tag == "replace":
