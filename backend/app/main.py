@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import io
 import re
+import unicodedata
 from typing import Annotated, Literal
 
 import mammoth
@@ -106,6 +107,52 @@ async def _convert_to_html(file: UploadFile) -> tuple[str, list[ConversionNote]]
     return html_content, notes
 
 
+def _is_cjk_char(char: str) -> bool:
+    if not char:
+        return False
+    codepoint = ord(char)
+    return (
+        0x4E00 <= codepoint <= 0x9FFF  # CJK Unified Ideographs
+        or 0x3400 <= codepoint <= 0x4DBF  # CJK Unified Ideographs Extension A
+        or 0x20000 <= codepoint <= 0x2A6DF  # CJK Unified Ideographs Extension B
+        or 0x2A700 <= codepoint <= 0x2B73F  # CJK Unified Ideographs Extension C
+        or 0x2B740 <= codepoint <= 0x2B81F  # CJK Unified Ideographs Extension D
+        or 0x2B820 <= codepoint <= 0x2CEAF  # CJK Unified Ideographs Extension E
+        or 0xF900 <= codepoint <= 0xFAFF  # CJK Compatibility Ideographs
+    )
+
+
+def _is_punctuation(char: str) -> bool:
+    return unicodedata.category(char).startswith("P")
+
+
+def _tokenize_text(text: str) -> list[str]:
+    tokens: list[str] = []
+    buffer: list[str] = []
+
+    def flush_buffer() -> None:
+        if buffer:
+            tokens.append("".join(buffer))
+            buffer.clear()
+
+    for char in text:
+        if char.isspace():
+            flush_buffer()
+            tokens.append(char)
+            continue
+
+        if _is_cjk_char(char) or _is_punctuation(char):
+            flush_buffer()
+            tokens.append(char)
+            continue
+
+        buffer.append(char)
+
+    flush_buffer()
+
+    return tokens
+
+
 def _prepare_html_tokens(html_content: str) -> tuple[BeautifulSoup, list[str], list[dict[str, object]]]:
     soup = BeautifulSoup(html_content or "", "html.parser")
     tokens: list[str] = []
@@ -119,7 +166,7 @@ def _prepare_html_tokens(html_content: str) -> tuple[BeautifulSoup, list[str], l
         if text == "":
             continue
 
-        parts = re.findall(r"\s+|[^\s]+", text)
+        parts = _tokenize_text(text)
         if not parts:
             continue
 

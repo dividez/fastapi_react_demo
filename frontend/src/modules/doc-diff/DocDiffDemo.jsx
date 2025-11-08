@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextStyle from "@tiptap/extension-text-style";
@@ -91,7 +91,6 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
   const [modifiedFile, setModifiedFile] = useState(null);
   const [originalHtml, setOriginalHtml] = useState(`<p>${emptyPlaceholder}</p>`);
   const [modifiedHtml, setModifiedHtml] = useState(`<p>${emptyPlaceholder}</p>`);
-  const [diffHtml, setDiffHtml] = useState("<p>待生成差异视图。</p>");
   const [diffItems, setDiffItems] = useState([]);
   const [diffFilter, setDiffFilter] = useState("all");
   const [selectedDiffId, setSelectedDiffId] = useState("");
@@ -101,14 +100,11 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
   const [isComparing, setIsComparing] = useState(false);
   const [error, setError] = useState("");
 
-  const diffContainerRef = useRef(null);
-
   const originalEditor = useReadonlyEditor(originalHtml);
   const modifiedEditor = useReadonlyEditor(modifiedHtml);
 
   useEffect(() => {
     if (!originalFile || !modifiedFile) {
-      setDiffHtml("<p>待生成差异视图。</p>");
       setDiffItems([]);
       setSelectedDiffId("");
       setDiffFilter("all");
@@ -128,7 +124,6 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
     setOriginalHtml(`<p>原始文档：${file.name}，请继续上传对比文档。</p>`);
     setOriginalNotes([]);
     setStats(null);
-    setDiffHtml("<p>待生成差异视图。</p>");
     setDiffItems([]);
     setSelectedDiffId("");
     setDiffFilter("all");
@@ -143,7 +138,6 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
     setModifiedHtml(`<p>对比文档：${file.name}，点击生成对比。</p>`);
     setModifiedNotes([]);
     setStats(null);
-    setDiffHtml("<p>待生成差异视图。</p>");
     setDiffItems([]);
     setSelectedDiffId("");
     setDiffFilter("all");
@@ -180,7 +174,6 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
       const payload = await response.json();
       setOriginalHtml(payload.original_html || `<p>${emptyPlaceholder}</p>`);
       setModifiedHtml(payload.modified_html || `<p>${emptyPlaceholder}</p>`);
-      setDiffHtml(payload.diff_html || "<p>未检测到差异。</p>");
       setDiffItems(payload.diff_items ?? []);
       setDiffFilter("all");
       setSelectedDiffId("");
@@ -252,34 +245,19 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
     return true;
   }, []);
 
-  const scrollToDiffMarker = useCallback(
-    (diffId) => {
-      const container = diffContainerRef.current;
-      if (!container) return false;
-      const target = container.querySelector(
-        `[data-diff-id="${diffId}"]`
-      );
-      if (!target) return false;
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      return true;
-    },
-    [diffContainerRef]
-  );
-
   const handleDiffItemClick = useCallback(
     (item) => {
       setSelectedDiffId(item.id);
-      if (!scrollToDiffMarker(item.id)) {
-        const triedOriginal =
-          item.type !== "insert" && scrollToEditorMarker(originalEditor, item.id);
-        const triedModified =
-          item.type !== "delete" && scrollToEditorMarker(modifiedEditor, item.id);
-        if (!triedOriginal && !triedModified) {
-          scrollToDiffMarker(item.id);
-        }
+      const scrollers = [];
+      if (item.type !== "insert") {
+        scrollers.push(() => scrollToEditorMarker(originalEditor, item.id));
       }
+      if (item.type !== "delete") {
+        scrollers.push(() => scrollToEditorMarker(modifiedEditor, item.id));
+      }
+      scrollers.some((fn) => fn());
     },
-    [modifiedEditor, originalEditor, scrollToDiffMarker, scrollToEditorMarker]
+    [modifiedEditor, originalEditor, scrollToEditorMarker]
   );
 
   const handleDiffItemKeyDown = useCallback(
@@ -298,13 +276,11 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
       setSelectedDiffId(item.id);
       if (target === "original") {
         scrollToEditorMarker(originalEditor, item.id);
-      } else if (target === "modified") {
-        scrollToEditorMarker(modifiedEditor, item.id);
       } else {
-        scrollToDiffMarker(item.id);
+        scrollToEditorMarker(modifiedEditor, item.id);
       }
     },
-    [modifiedEditor, originalEditor, scrollToDiffMarker, scrollToEditorMarker]
+    [modifiedEditor, originalEditor, scrollToEditorMarker]
   );
 
   useEffect(() => {
@@ -322,8 +298,7 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
 
     toggleActive(originalEditor?.view?.dom);
     toggleActive(modifiedEditor?.view?.dom);
-    toggleActive(diffContainerRef.current);
-  }, [selectedDiffId, originalEditor, modifiedEditor, diffHtml]);
+  }, [selectedDiffId, originalEditor, modifiedEditor]);
 
   const renderDiffText = useCallback((value) => {
     const segments = createPreviewSegments(value);
@@ -427,16 +402,6 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
               </div>
             </section>
 
-            <section className="doc-diff__result">
-              <header className="doc-diff__result-header">差异高亮</header>
-              <div
-                ref={diffContainerRef}
-                className={clsx("doc-diff__diff-html", {
-                  "doc-diff__diff-html--loading": isComparing,
-                })}
-                dangerouslySetInnerHTML={{ __html: diffHtml }}
-              />
-            </section>
           </div>
 
           <aside className="doc-diff__sidebar">
@@ -540,13 +505,6 @@ export default function DocDiffDemo({ title, subtitle, apiBaseUrl }) {
                             对比稿
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="doc-diff__diff-item-action"
-                          onClick={(event) => handleJump(event, item, "diff")}
-                        >
-                          差异视图
-                        </button>
                       </div>
                     </li>
                   ))}
