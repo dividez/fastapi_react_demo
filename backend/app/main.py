@@ -11,7 +11,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from bs4 import BeautifulSoup
-from bs4.element import NavigableString
+from bs4.element import NavigableString, Tag
 
 app = FastAPI(title="Word to Tiptap Converter")
 
@@ -57,11 +57,18 @@ class DiffStats(BaseModel):
     replaced_tokens: int
 
 
+class DiffLocation(BaseModel):
+    section_title: str | None = None
+    block_summary: str | None = None
+
+
 class DiffItem(BaseModel):
     id: str
     type: Literal["insert", "delete", "replace"]
     original_text: str
     modified_text: str
+    original_location: DiffLocation | None = None
+    modified_location: DiffLocation | None = None
 
 
 class DiffResponse(BaseModel):
@@ -188,6 +195,98 @@ def _escape_tokens(tokens: list[str]) -> str:
     return "".join(html.escape(token) for token in tokens)
 
 
+def _truncate_text(value: str, limit: int = 80) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: limit - 1] + "…"
+
+
+def _find_block_node(node: NavigableString) -> Tag | None:
+    current = node.parent
+    while current is not None:
+        if isinstance(current, Tag) and current.name in {
+            "p",
+            "li",
+            "td",
+            "th",
+            "caption",
+            "blockquote",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "pre",
+            "code",
+            "div",
+        }:
+            return current
+        current = current.parent
+    return None
+
+
+def _summarize_location(
+    soup: BeautifulSoup,
+    node_infos: list[dict[str, object]],
+    start_index: int,
+) -> DiffLocation | None:
+    if not node_infos:
+        return None
+
+    target_info: dict[str, object] | None = None
+    for info in node_infos:
+        if info["start"] <= start_index < info["end"]:
+            target_info = info
+            break
+
+    if target_info is None and start_index > 0:
+        backtrack_index = start_index - 1
+        for info in node_infos:
+            if info["start"] <= backtrack_index < info["end"]:
+                target_info = info
+                break
+
+    if target_info is None:
+        for info in reversed(node_infos):
+            if info["start"] <= start_index:
+                target_info = info
+                break
+
+    if target_info is None:
+        return None
+
+    node = target_info["node"]
+    if not isinstance(node, NavigableString):
+        return None
+
+    block = _find_block_node(node)
+    block_summary: str | None = None
+    if block is not None:
+        text = block.get_text(" ", strip=True)
+        if text:
+            block_summary = _truncate_text(text)
+
+    heading: Tag | None = None
+    search_anchor: Tag | None = block if block is not None else node.parent
+    heading_tags = ["h1", "h2", "h3", "h4", "h5", "h6"]
+    if search_anchor is not None:
+        heading = search_anchor if isinstance(search_anchor, Tag) and search_anchor.name in heading_tags else search_anchor.find_previous(heading_tags)
+    else:
+        heading = soup.find(heading_tags)
+
+    section_title: str | None = None
+    if heading is not None:
+        section_text = heading.get_text(" ", strip=True)
+        if section_text:
+            section_title = _truncate_text(section_text, 60)
+
+    if section_title is None and block_summary is None:
+        return None
+
+    return DiffLocation(section_title=section_title, block_summary=block_summary)
+
+
 def _build_highlight_lookup(highlights: list[dict[str, object]]) -> dict[int, dict[str, object]]:
     lookup: dict[int, dict[str, object]] = {}
     for entry in highlights:
@@ -295,6 +394,9 @@ def _build_diff(
             inserted_tokens += j2 - j1
             inserted_raw = "".join(modified_tokens[j1:j2])
             inserted_escaped = _escape_tokens(modified_tokens[j1:j2])
+            modified_location = _summarize_location(
+                modified_soup, modified_node_infos, j1
+            )
             diff_parts.append(
                 f'<ins class="diff-insert" data-diff-id="{diff_id}">{inserted_escaped}</ins>'
             )
@@ -304,6 +406,7 @@ def _build_diff(
                     type="insert",
                     original_text="",
                     modified_text=inserted_raw,
+                    modified_location=modified_location,
                 )
             )
             highlight_map["modified"].append(
@@ -323,6 +426,9 @@ def _build_diff(
             deleted_tokens += i2 - i1
             deleted_raw = "".join(original_tokens[i1:i2])
             deleted_escaped = _escape_tokens(original_tokens[i1:i2])
+            original_location = _summarize_location(
+                original_soup, original_node_infos, i1
+            )
             diff_parts.append(
                 f'<del class="diff-delete" data-diff-id="{diff_id}">{deleted_escaped}</del>'
             )
@@ -332,6 +438,7 @@ def _build_diff(
                     type="delete",
                     original_text=deleted_raw,
                     modified_text="",
+                    original_location=original_location,
                 )
             )
             highlight_map["original"].append(
@@ -352,6 +459,12 @@ def _build_diff(
             added_raw = "".join(modified_tokens[j1:j2])
             removed_escaped = _escape_tokens(original_tokens[i1:i2])
             added_escaped = _escape_tokens(modified_tokens[j1:j2])
+            original_location = _summarize_location(
+                original_soup, original_node_infos, i1
+            )
+            modified_location = _summarize_location(
+                modified_soup, modified_node_infos, j1
+            )
 
             if i1 != i2:
                 diff_parts.append(
@@ -387,6 +500,8 @@ def _build_diff(
                     type="replace",
                     original_text=removed_raw,
                     modified_text=added_raw,
+                    original_location=original_location,
+                    modified_location=modified_location,
                 )
             )
 

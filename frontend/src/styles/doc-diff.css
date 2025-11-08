@@ -56,7 +56,7 @@
 
 .doc-diff__panes {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
 }
 
@@ -112,6 +112,26 @@
   background: rgba(82, 102, 255, 0.12);
   padding: 4px 10px;
   border-radius: 999px;
+}
+
+.doc-diff__sidebar-search {
+  width: 100%;
+}
+
+.doc-diff__sidebar-search input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(82, 102, 255, 0.25);
+  background: rgba(248, 249, 255, 0.8);
+  font-size: 13px;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.doc-diff__sidebar-search input:focus {
+  border-color: rgba(82, 102, 255, 0.6);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(82, 102, 255, 0.18);
 }
 
 .doc-diff__filters {
@@ -198,6 +218,32 @@
 .doc-diff__diff-item-main:focus-visible {
   box-shadow: 0 0 0 3px rgba(82, 102, 255, 0.45);
   border-radius: 12px;
+}
+
+.doc-diff__diff-item-location {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.doc-diff__diff-item-location-title {
+  font-weight: 600;
+  color: #1f2f80;
+}
+
+.doc-diff__diff-item-location-summary {
+  line-height: 1.5;
+}
+
+.doc-diff__diff-item-status {
+  font-size: 11px;
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
 }
 
 .doc-diff__diff-item-header {
@@ -312,6 +358,35 @@
   text-align: center;
 }
 
+.doc-diff__sidebar-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.doc-diff__sidebar-action {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2f80;
+  background: rgba(31, 47, 128, 0.1);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.doc-diff__sidebar-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.doc-diff__sidebar-action:not(:disabled):hover {
+  background: rgba(31, 47, 128, 0.16);
+  transform: translateY(-1px);
+}
+
 .doc-diff__diff-text {
   display: inline-flex;
   flex-wrap: wrap;
@@ -372,6 +447,10 @@
   color: #10194a;
 }
 
+.diff-marker--hovered {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+}
+
 .doc-diff__diff-html [data-diff-id] {
   border-radius: 4px;
   padding: 0 2px;
@@ -383,6 +462,83 @@
 
 .contract-sheet [data-diff-id] {
   transition: box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.doc-diff__summary {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+  background: linear-gradient(135deg, rgba(82, 102, 255, 0.08), rgba(31, 47, 128, 0.04));
+  padding: 20px;
+  border-radius: 20px;
+}
+
+.doc-diff__summary-card {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 10px 28px rgba(31, 47, 128, 0.12);
+}
+
+.doc-diff__summary-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2f80;
+}
+
+.doc-diff__summary-total {
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.doc-diff__summary-progress {
+  font-size: 13px;
+  color: #475569;
+}
+
+.doc-diff__summary-metrics {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.doc-diff__summary-metric {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: inset 0 0 0 1px rgba(82, 102, 255, 0.12);
+}
+
+.doc-diff__summary-metric-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.doc-diff__summary-metric-label--insert {
+  color: #15803d;
+}
+
+.doc-diff__summary-metric-label--replace {
+  color: #b45309;
+}
+
+.doc-diff__summary-metric-label--delete {
+  color: #b91c1c;
+}
+
+.doc-diff__summary-metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
 }
 
 @media (max-width: 920px) {
@@ -400,5 +556,13 @@
   .doc-diff__sidebar {
     position: static;
     max-height: none;
+  }
+
+  .doc-diff__summary {
+    flex-direction: column;
+  }
+
+  .doc-diff__summary-metrics {
+    flex-direction: column;
   }
 }
