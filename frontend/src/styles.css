@@ -284,17 +284,21 @@ body {
 }
 
 .contract-sheet .ProseMirror p,
-.contract-sheet .ProseMirror li {
+.contract-sheet .ProseMirror li,
+.bilingual-richtext p,
+.bilingual-richtext li {
   font-family: "Noto Serif SC", "Times New Roman", "Songti SC", serif;
 }
 
-.contract-sheet .ProseMirror p {
+.contract-sheet .ProseMirror p,
+.bilingual-richtext p {
   margin: 0 0 14px;
   text-indent: 2em;
   line-height: 1.8;
 }
 
-.contract-sheet .ProseMirror p:first-child {
+.contract-sheet .ProseMirror p:first-child,
+.bilingual-richtext p:first-child {
   text-indent: 0;
 }
 
@@ -303,7 +307,13 @@ body {
 .contract-sheet .ProseMirror h3,
 .contract-sheet .ProseMirror h4,
 .contract-sheet .ProseMirror h5,
-.contract-sheet .ProseMirror h6 {
+.contract-sheet .ProseMirror h6,
+.bilingual-richtext h1,
+.bilingual-richtext h2,
+.bilingual-richtext h3,
+.bilingual-richtext h4,
+.bilingual-richtext h5,
+.bilingual-richtext h6 {
   font-family: "Source Han Serif SC", "SimHei", "Microsoft YaHei", sans-serif;
   font-weight: 600;
   margin: 24px 0 16px;
@@ -311,59 +321,72 @@ body {
   color: #192135;
 }
 
-.contract-sheet .ProseMirror h1 {
+.contract-sheet .ProseMirror h1,
+.bilingual-richtext h1 {
   font-size: 30px;
   text-align: center;
   letter-spacing: 0.1em;
 }
 
-.contract-sheet .ProseMirror h2 {
+.contract-sheet .ProseMirror h2,
+.bilingual-richtext h2 {
   font-size: 22px;
   border-bottom: 1px solid rgba(30, 45, 80, 0.15);
   padding-bottom: 6px;
 }
 
-.contract-sheet .ProseMirror h3 {
+.contract-sheet .ProseMirror h3,
+.bilingual-richtext h3 {
   font-size: 18px;
 }
 
-.contract-sheet .ProseMirror h4 {
+.contract-sheet .ProseMirror h4,
+.bilingual-richtext h4 {
   font-size: 16px;
 }
 
-.contract-sheet .ProseMirror strong {
+.contract-sheet .ProseMirror strong,
+.bilingual-richtext strong {
   font-weight: 700;
   color: #11162c;
 }
 
-.contract-sheet .ProseMirror em {
+.contract-sheet .ProseMirror em,
+.bilingual-richtext em {
   font-style: italic;
   color: #293861;
 }
 
-.contract-sheet .ProseMirror a {
+.contract-sheet .ProseMirror a,
+.bilingual-richtext a {
   color: #1d4ed8;
   text-decoration: underline;
 }
 
 .contract-sheet .ProseMirror ul,
-.contract-sheet .ProseMirror ol {
+.contract-sheet .ProseMirror ol,
+.bilingual-richtext ul,
+.bilingual-richtext ol {
   margin: 0 0 14px;
   padding-left: 2.5em;
   line-height: 1.8;
 }
 
 .contract-sheet .ProseMirror ol ol,
-.contract-sheet .ProseMirror ul ul {
+.contract-sheet .ProseMirror ul ul,
+.bilingual-richtext ol ol,
+.bilingual-richtext ul ul {
   margin: 8px 0;
 }
 
-.contract-sheet .ProseMirror li {
+.contract-sheet .ProseMirror li,
+.bilingual-richtext li {
   margin: 6px 0;
   text-indent: 0;
 }
 
-.contract-sheet .ProseMirror blockquote {
+.contract-sheet .ProseMirror blockquote,
+.bilingual-richtext blockquote {
   border-left: 3px solid rgba(30, 45, 80, 0.2);
   margin: 18px 0;
   padding-left: 20px;
@@ -371,7 +394,8 @@ body {
   font-style: italic;
 }
 
-.contract-sheet .ProseMirror table {
+.contract-sheet .ProseMirror table,
+.bilingual-richtext table {
   border-collapse: collapse;
   width: 100%;
   margin: 16px 0;
@@ -379,25 +403,30 @@ body {
 }
 
 .contract-sheet .ProseMirror table td,
-.contract-sheet .ProseMirror table th {
+.contract-sheet .ProseMirror table th,
+.bilingual-richtext table td,
+.bilingual-richtext table th {
   border: 1px solid rgba(30, 45, 80, 0.2);
   padding: 8px 12px;
   vertical-align: top;
   line-height: 1.6;
 }
 
-.contract-sheet .ProseMirror table th {
+.contract-sheet .ProseMirror table th,
+.bilingual-richtext table th {
   background: rgba(36, 80, 255, 0.08);
   font-weight: 600;
 }
 
-.contract-sheet .ProseMirror hr {
+.contract-sheet .ProseMirror hr,
+.bilingual-richtext hr {
   border: none;
   border-top: 1px solid rgba(30, 45, 80, 0.2);
   margin: 24px 0;
 }
 
-.contract-sheet .ProseMirror pre {
+.contract-sheet .ProseMirror pre,
+.bilingual-richtext pre {
   background: #f3f4f7;
   padding: 12px 16px;
   border-radius: 6px;
@@ -405,10 +434,287 @@ body {
   font-size: 13px;
 }
 
-.contract-sheet .ProseMirror code {
+.contract-sheet .ProseMirror code,
+.bilingual-richtext code {
   background: rgba(15, 23, 42, 0.06);
   padding: 2px 4px;
   border-radius: 4px;
+}
+
+.bilingual-editor {
+  width: 100%;
+  max-width: 1120px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 24px 60px rgba(30, 45, 80, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.bilingual-editor__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.bilingual-editor__filename {
+  font-size: 18px;
+  font-weight: 600;
+  color: #11162c;
+}
+
+.bilingual-editor__hint {
+  font-size: 13px;
+  color: #4c5862;
+  margin-top: 6px;
+}
+
+.bilingual-editor__status {
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bilingual-editor__status--processing {
+  background: rgba(36, 80, 255, 0.12);
+  color: #1f37b4;
+}
+
+.bilingual-editor__status--ready {
+  background: rgba(38, 188, 120, 0.14);
+  color: #1f7a5b;
+}
+
+.bilingual-editor__columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.bilingual-column {
+  background: rgba(243, 244, 250, 0.78);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.bilingual-column--right {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.bilingual-column__title {
+  padding: 18px 20px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2430;
+  letter-spacing: 0.02em;
+}
+
+.bilingual-column__body {
+  padding: 0 20px 24px;
+  max-height: 640px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.bilingual-column__body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bilingual-column__body::-webkit-scrollbar-thumb {
+  background: rgba(24, 32, 68, 0.16);
+  border-radius: 999px;
+}
+
+.bilingual-segment {
+  position: relative;
+  padding: 20px 16px 16px;
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  border: 1px solid rgba(24, 32, 68, 0.08);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.bilingual-segment:first-child {
+  margin-top: 0;
+}
+
+.bilingual-segment--active {
+  border-color: rgba(36, 80, 255, 0.4);
+  box-shadow: 0 12px 28px rgba(36, 80, 255, 0.14);
+}
+
+.bilingual-segment--inserted {
+  border-style: dashed;
+  background: rgba(38, 188, 120, 0.08);
+}
+
+.bilingual-segment--replaced {
+  background: rgba(246, 248, 255, 0.8);
+}
+
+.bilingual-segment__badge {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(36, 80, 255, 0.14);
+  color: #1f37b4;
+}
+
+.bilingual-segment__badge--inserted {
+  background: rgba(38, 188, 120, 0.18);
+  color: #1f7a5b;
+}
+
+.bilingual-segment__badge--replaced {
+  background: rgba(36, 80, 255, 0.16);
+}
+
+.bilingual-card {
+  border: 1px solid rgba(24, 32, 68, 0.08);
+  border-radius: 14px;
+  padding: 18px 16px 14px;
+  margin-top: 16px;
+  background: rgba(248, 249, 255, 0.86);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bilingual-card:first-child {
+  margin-top: 0;
+}
+
+.bilingual-card--active {
+  border-color: rgba(36, 80, 255, 0.36);
+  box-shadow: 0 12px 26px rgba(36, 80, 255, 0.14);
+}
+
+.bilingual-card--replaced {
+  background: rgba(237, 241, 255, 0.8);
+}
+
+.bilingual-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #1f2430;
+  font-weight: 600;
+}
+
+.bilingual-card__status {
+  font-size: 12px;
+  color: #4c5862;
+}
+
+.bilingual-card__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.bilingual-card__actions button {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  background: linear-gradient(135deg, #2450ff 0%, #5f7dff 100%);
+  color: #fff;
+}
+
+.bilingual-card__actions button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(36, 80, 255, 0.2);
+}
+
+.bilingual-card__actions button:disabled {
+  cursor: not-allowed;
+  background: rgba(24, 32, 68, 0.12);
+  color: rgba(24, 32, 68, 0.5);
+  box-shadow: none;
+}
+
+.bilingual-translation-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(36, 80, 255, 0.08);
+  color: #1f37b4;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(36, 80, 255, 0.2);
+  border-top-color: rgba(36, 80, 255, 0.9);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bilingual-operations {
+  background: rgba(248, 249, 255, 0.9);
+  border-radius: 14px;
+  padding: 18px 20px;
+  border: 1px solid rgba(24, 32, 68, 0.08);
+}
+
+.bilingual-operations__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2430;
+  margin-bottom: 12px;
+}
+
+.bilingual-operations ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bilingual-operations li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #4c5862;
+  gap: 16px;
+}
+
+.bilingual-operations time {
+  color: #1f37b4;
+  font-weight: 600;
 }
 
 @media (max-width: 960px) {
@@ -444,5 +750,17 @@ body {
 
   .module-placeholder {
     padding: 24px;
+  }
+
+  .bilingual-editor {
+    padding: 20px;
+  }
+
+  .bilingual-editor__columns {
+    grid-template-columns: 1fr;
+  }
+
+  .bilingual-column__body {
+    max-height: none;
   }
 }
