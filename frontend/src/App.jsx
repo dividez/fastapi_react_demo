@@ -2,6 +2,7 @@ import { useState } from "react";
 import clsx from "clsx";
 import WordPreview from "./modules/word-preview/WordPreview.jsx";
 import BilingualEditor from "./modules/bilingual/BilingualEditor.jsx";
+import DocDiffDemo from "./modules/doc-diff/DocDiffDemo.jsx";
 import PlannedModule from "./modules/planned/PlannedModule.jsx";
 
 const API_BASE_URL =
@@ -27,15 +28,9 @@ const MODULES = [
     id: "doc-diff",
     name: "文档对比编辑器",
     subtitle:
-      "规划中：原稿与修改稿并排对比，可视化展示差异并选择接受。",
-    status: "planned",
-    highlights: [
-      "双栏展示：左侧原始文档，右侧 AI / 修改版本，保持滚动同步。",
-      "差异高亮：插入、删除、修改分别使用不同标记直观呈现。",
-      "审校操作：逐段接受或拒绝修改，实时回传 FastAPI 后端。",
-      "版本管理：与后端联动生成版本历史，支持回滚与复核记录。",
-    ],
-    component: PlannedModule,
+      "上传原稿与修改稿，自动转换为可阅读排版并生成差异高亮视图。",
+    status: "ready",
+    component: DocDiffDemo,
   },
 ];
 

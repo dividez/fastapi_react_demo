@@ -1,0 +1,120 @@
+.doc-diff__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.doc-diff__compare-button {
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #1f2f80 0%, #5266ff 100%);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.doc-diff__compare-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(41, 60, 180, 0.22);
+}
+
+.doc-diff__compare-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.doc-diff__compare-button:disabled,
+.doc-diff__compare-button--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+  transform: none;
+}
+
+.doc-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.doc-diff__panes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.doc-diff__pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.doc-diff__pane-header {
+  font-size: 16px;
+  font-weight: 600;
+  color: #29304f;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.doc-diff__pane-meta {
+  font-size: 13px;
+  font-weight: 500;
+  color: #5260a3;
+  background: rgba(82, 96, 163, 0.12);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.doc-diff__result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.doc-diff__result-header {
+  font-size: 16px;
+  font-weight: 600;
+  color: #29304f;
+}
+
+.doc-diff__diff-html {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 18px 45px rgba(20, 28, 60, 0.12);
+  line-height: 1.7;
+  font-size: 15px;
+  color: #1f2430;
+  min-height: 160px;
+  white-space: pre-wrap;
+}
+
+.doc-diff__diff-html--loading {
+  opacity: 0.7;
+}
+
+.diff-insert {
+  background: rgba(64, 191, 114, 0.28);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+.diff-delete {
+  background: rgba(220, 76, 100, 0.28);
+  border-radius: 4px;
+  padding: 0 2px;
+  text-decoration: line-through;
+}
+
+@media (max-width: 920px) {
+  .doc-diff__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
