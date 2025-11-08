@@ -294,14 +294,24 @@ def _summarize_location(
     return DiffLocation(section_title=section_title, block_summary=block_summary)
 
 
-def _build_highlight_lookup(highlights: list[dict[str, object]]) -> dict[int, dict[str, object]]:
-    lookup: dict[int, dict[str, object]] = {}
+def _build_highlight_lookup(
+    highlights: list[dict[str, object]]
+) -> tuple[dict[int, dict[str, object]], dict[int, list[dict[str, object]]]]:
+    token_lookup: dict[int, dict[str, object]] = {}
+    boundary_lookup: dict[int, list[dict[str, object]]] = {}
+
     for entry in highlights:
+        boundary_index = entry.get("boundary_index")
+        if boundary_index is not None:
+            boundary_lookup.setdefault(boundary_index, []).append(entry)
+            continue
+
         start = entry["start"]
         end = entry["end"]
         for index in range(start, end):
-            lookup[index] = entry
-    return lookup
+            token_lookup[index] = entry
+
+    return token_lookup, boundary_lookup
 
 
 def _apply_highlights(
@@ -312,7 +322,34 @@ def _apply_highlights(
     if not highlights:
         return str(soup)
 
-    lookup = _build_highlight_lookup(highlights)
+    token_lookup, boundary_lookup = _build_highlight_lookup(highlights)
+
+    def build_marker(
+        entry: dict[str, object], text: str, *, placeholder: bool = False
+    ) -> Tag:
+        mark = soup.new_tag("span")
+        classes = [
+            "diff-marker",
+            f'diff-marker--{entry["type"]}',
+            f'diff-marker--{entry["role"]}',
+            "diff-marker--with-pill",
+        ]
+        if placeholder:
+            classes.append("diff-marker--placeholder")
+        mark["class"] = classes
+        mark["data-diff-id"] = entry["id"]
+        mark["data-diff-type"] = entry["type"]
+        mark["data-diff-role"] = entry["role"]
+        label = entry.get("label")
+        number = entry.get("number")
+        if label:
+            mark["data-diff-type-label"] = label
+        if number is not None:
+            mark["data-diff-number"] = str(number)
+        if label and number is not None:
+            mark["title"] = f"{label} #{number}"
+        mark.string = text
+        return mark
 
     for info in node_infos:
         node = info["node"]
@@ -333,45 +370,59 @@ def _apply_highlights(
                 return
             text = "".join(buffer)
             if current_entry:
-                mark = soup.new_tag("span")
-                classes = [
-                    "diff-marker",
-                    f'diff-marker--{current_entry["type"]}',
-                    f'diff-marker--{current_entry["role"]}',
-                ]
-                mark["class"] = classes
-                mark["data-diff-id"] = current_entry["id"]
-                mark["data-diff-type"] = current_entry["type"]
-                mark["data-diff-role"] = current_entry["role"]
-                label = current_entry.get("label")
-                number = current_entry.get("number")
-                if label:
-                    mark["data-diff-type-label"] = label
-                if number is not None:
-                    mark["data-diff-number"] = str(number)
-                if label and number is not None:
-                    mark["title"] = f"{label} #{number}"
-                mark["class"].append("diff-marker--with-pill")
-                mark.string = text
-                fragments.append(mark)
+                fragments.append(build_marker(current_entry, text))
             else:
                 fragments.append(text)
             buffer = []
 
+        def inject_placeholders(boundary_index: int) -> None:
+            entries = boundary_lookup.pop(boundary_index, None)
+            if not entries:
+                return
+            flush()
+            for entry in entries:
+                fragments.append(
+                    build_marker(
+                        entry,
+                        entry.get("placeholder_text", "\u00a0"),
+                        placeholder=True,
+                    )
+                )
+
+        inject_placeholders(start_index)
+
         for offset, token in enumerate(tokens):
             absolute_index = start_index + offset
-            entry = lookup.get(absolute_index)
+            entry = token_lookup.get(absolute_index)
             if entry is not current_entry:
                 flush()
                 current_entry = entry
             buffer.append(token)
+            inject_placeholders(absolute_index + 1)
 
         flush()
+        inject_placeholders(info["end"])
 
         for fragment in fragments:
             node.insert_before(fragment)
 
         node.extract()
+
+    if boundary_lookup:
+        container: Tag | BeautifulSoup
+        if isinstance(soup, BeautifulSoup) and soup.body:
+            container = soup.body
+        else:
+            container = soup
+        for entries in boundary_lookup.values():
+            for entry in entries:
+                container.append(
+                    build_marker(
+                        entry,
+                        entry.get("placeholder_text", "\u00a0"),
+                        placeholder=True,
+                    )
+                )
 
     return str(soup)
 
@@ -424,6 +475,9 @@ def _build_diff(
                     type="insert",
                     original_text="",
                     modified_text=inserted_raw,
+                    original_location=_summarize_location(
+                        original_soup, original_node_infos, i1
+                    ),
                     modified_location=modified_location,
                 )
             )
@@ -436,6 +490,19 @@ def _build_diff(
                     "end": j2,
                     "label": DIFF_TYPE_LABELS["insert"],
                     "number": diff_number,
+                }
+            )
+            highlight_map["original"].append(
+                {
+                    "id": diff_id,
+                    "type": "insert",
+                    "role": "original",
+                    "start": i1,
+                    "end": i1,
+                    "boundary_index": i1,
+                    "label": DIFF_TYPE_LABELS["insert"],
+                    "number": diff_number,
+                    "placeholder": True,
                 }
             )
         elif tag == "delete":
