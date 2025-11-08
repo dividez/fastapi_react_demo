@@ -3,14 +3,17 @@ from __future__ import annotations
 import html
 import io
 import re
+import unicodedata
 from typing import Annotated, Literal
 
 import mammoth
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from collections import defaultdict
+
 from bs4 import BeautifulSoup
-from bs4.element import NavigableString
+from bs4.element import NavigableString, Tag
 
 app = FastAPI(title="Word to Tiptap Converter")
 
@@ -56,11 +59,18 @@ class DiffStats(BaseModel):
     replaced_tokens: int
 
 
+class DiffLocation(BaseModel):
+    section_title: str | None = None
+    block_summary: str | None = None
+
+
 class DiffItem(BaseModel):
     id: str
     type: Literal["insert", "delete", "replace"]
     original_text: str
     modified_text: str
+    original_location: DiffLocation | None = None
+    modified_location: DiffLocation | None = None
 
 
 class DiffResponse(BaseModel):
@@ -71,6 +81,13 @@ class DiffResponse(BaseModel):
     diff_items: list[DiffItem] = []
     original_notes: list[ConversionNote] = []
     modified_notes: list[ConversionNote] = []
+
+
+DIFF_TYPE_LABELS: dict[str, str] = {
+    "insert": "新增",
+    "delete": "删除",
+    "replace": "修改",
+}
 
 
 def _ensure_docx(file: UploadFile) -> None:
@@ -106,6 +123,52 @@ async def _convert_to_html(file: UploadFile) -> tuple[str, list[ConversionNote]]
     return html_content, notes
 
 
+def _is_cjk_char(char: str) -> bool:
+    if not char:
+        return False
+    codepoint = ord(char)
+    return (
+        0x4E00 <= codepoint <= 0x9FFF  # CJK Unified Ideographs
+        or 0x3400 <= codepoint <= 0x4DBF  # CJK Unified Ideographs Extension A
+        or 0x20000 <= codepoint <= 0x2A6DF  # CJK Unified Ideographs Extension B
+        or 0x2A700 <= codepoint <= 0x2B73F  # CJK Unified Ideographs Extension C
+        or 0x2B740 <= codepoint <= 0x2B81F  # CJK Unified Ideographs Extension D
+        or 0x2B820 <= codepoint <= 0x2CEAF  # CJK Unified Ideographs Extension E
+        or 0xF900 <= codepoint <= 0xFAFF  # CJK Compatibility Ideographs
+    )
+
+
+def _is_punctuation(char: str) -> bool:
+    return unicodedata.category(char).startswith("P")
+
+
+def _tokenize_text(text: str) -> list[str]:
+    tokens: list[str] = []
+    buffer: list[str] = []
+
+    def flush_buffer() -> None:
+        if buffer:
+            tokens.append("".join(buffer))
+            buffer.clear()
+
+    for char in text:
+        if char.isspace():
+            flush_buffer()
+            tokens.append(char)
+            continue
+
+        if _is_cjk_char(char) or _is_punctuation(char):
+            flush_buffer()
+            tokens.append(char)
+            continue
+
+        buffer.append(char)
+
+    flush_buffer()
+
+    return tokens
+
+
 def _prepare_html_tokens(html_content: str) -> tuple[BeautifulSoup, list[str], list[dict[str, object]]]:
     soup = BeautifulSoup(html_content or "", "html.parser")
     tokens: list[str] = []
@@ -119,7 +182,7 @@ def _prepare_html_tokens(html_content: str) -> tuple[BeautifulSoup, list[str], l
         if text == "":
             continue
 
-        parts = re.findall(r"\s+|[^\s]+", text)
+        parts = _tokenize_text(text)
         if not parts:
             continue
 
@@ -141,6 +204,98 @@ def _escape_tokens(tokens: list[str]) -> str:
     return "".join(html.escape(token) for token in tokens)
 
 
+def _truncate_text(value: str, limit: int = 80) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: limit - 1] + "…"
+
+
+def _find_block_node(node: NavigableString) -> Tag | None:
+    current = node.parent
+    while current is not None:
+        if isinstance(current, Tag) and current.name in {
+            "p",
+            "li",
+            "td",
+            "th",
+            "caption",
+            "blockquote",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "pre",
+            "code",
+            "div",
+        }:
+            return current
+        current = current.parent
+    return None
+
+
+def _summarize_location(
+    soup: BeautifulSoup,
+    node_infos: list[dict[str, object]],
+    start_index: int,
+) -> DiffLocation | None:
+    if not node_infos:
+        return None
+
+    target_info: dict[str, object] | None = None
+    for info in node_infos:
+        if info["start"] <= start_index < info["end"]:
+            target_info = info
+            break
+
+    if target_info is None and start_index > 0:
+        backtrack_index = start_index - 1
+        for info in node_infos:
+            if info["start"] <= backtrack_index < info["end"]:
+                target_info = info
+                break
+
+    if target_info is None:
+        for info in reversed(node_infos):
+            if info["start"] <= start_index:
+                target_info = info
+                break
+
+    if target_info is None:
+        return None
+
+    node = target_info["node"]
+    if not isinstance(node, NavigableString):
+        return None
+
+    block = _find_block_node(node)
+    block_summary: str | None = None
+    if block is not None:
+        text = block.get_text(" ", strip=True)
+        if text:
+            block_summary = _truncate_text(text)
+
+    heading: Tag | None = None
+    search_anchor: Tag | None = block if block is not None else node.parent
+    heading_tags = ["h1", "h2", "h3", "h4", "h5", "h6"]
+    if search_anchor is not None:
+        heading = search_anchor if isinstance(search_anchor, Tag) and search_anchor.name in heading_tags else search_anchor.find_previous(heading_tags)
+    else:
+        heading = soup.find(heading_tags)
+
+    section_title: str | None = None
+    if heading is not None:
+        section_text = heading.get_text(" ", strip=True)
+        if section_text:
+            section_title = _truncate_text(section_text, 60)
+
+    if section_title is None and block_summary is None:
+        return None
+
+    return DiffLocation(section_title=section_title, block_summary=block_summary)
+
+
 def _build_highlight_lookup(highlights: list[dict[str, object]]) -> dict[int, dict[str, object]]:
     lookup: dict[int, dict[str, object]] = {}
     for entry in highlights:
@@ -151,6 +306,39 @@ def _build_highlight_lookup(highlights: list[dict[str, object]]) -> dict[int, di
     return lookup
 
 
+def _create_marker_tag(
+    soup: BeautifulSoup, entry: dict[str, object], text: str
+) -> Tag:
+    mark = soup.new_tag("span")
+    classes = [
+        "diff-marker",
+        f'diff-marker--{entry["type"]}',
+        f'diff-marker--{entry["role"]}',
+    ]
+    if entry.get("placeholder"):
+        classes.append("diff-marker--placeholder")
+    else:
+        classes.append("diff-marker--with-pill")
+    mark["class"] = classes
+    mark["data-diff-id"] = entry["id"]
+    mark["data-diff-type"] = entry["type"]
+    mark["data-diff-role"] = entry["role"]
+
+    label = entry.get("label")
+    number = entry.get("number")
+    if label:
+        mark["data-diff-type-label"] = label
+    if number is not None:
+        mark["data-diff-number"] = str(number)
+    if label and number is not None:
+        mark["title"] = f"{label} #{number}"
+    if entry.get("placeholder"):
+        mark["data-diff-placeholder"] = "true"
+
+    mark.string = text
+    return mark
+
+
 def _apply_highlights(
     soup: BeautifulSoup,
     node_infos: list[dict[str, object]],
@@ -159,7 +347,18 @@ def _apply_highlights(
     if not highlights:
         return str(soup)
 
-    lookup = _build_highlight_lookup(highlights)
+    span_highlights: list[dict[str, object]] = []
+    boundary_highlights: dict[int, list[dict[str, object]]] = defaultdict(list)
+
+    for entry in highlights:
+        start = int(entry.get("start", 0))
+        end = int(entry.get("end", start))
+        if end > start:
+            span_highlights.append(entry)
+        else:
+            boundary_highlights[start].append(entry)
+
+    lookup = _build_highlight_lookup(span_highlights)
 
     for info in node_infos:
         node = info["node"]
@@ -169,10 +368,21 @@ def _apply_highlights(
 
         tokens = info["tokens"]
         start_index = info["start"]
+        end_index = info["end"]
 
         current_entry: dict[str, object] | None = None
         buffer: list[str] = []
         fragments: list[object] = []
+
+        def emit_boundary(boundary_index: int) -> None:
+            entries = boundary_highlights.pop(boundary_index, None)
+            if not entries:
+                return
+            flush()
+            for boundary_entry in entries:
+                fragments.append(
+                    _create_marker_tag(soup, boundary_entry, "\u00a0")
+                )
 
         def flush() -> None:
             nonlocal buffer, current_entry
@@ -180,21 +390,12 @@ def _apply_highlights(
                 return
             text = "".join(buffer)
             if current_entry:
-                mark = soup.new_tag("span")
-                mark["class"] = [
-                    "diff-marker",
-                    f'diff-marker--{current_entry["type"]}',
-                    f'diff-marker--{current_entry["role"]}',
-                ]
-                mark["data-diff-id"] = current_entry["id"]
-                mark["data-diff-type"] = current_entry["type"]
-                mark["data-diff-role"] = current_entry["role"]
-                mark.string = text
-                fragments.append(mark)
+                fragments.append(_create_marker_tag(soup, current_entry, text))
             else:
                 fragments.append(text)
             buffer = []
 
+        emit_boundary(start_index)
         for offset, token in enumerate(tokens):
             absolute_index = start_index + offset
             entry = lookup.get(absolute_index)
@@ -202,13 +403,29 @@ def _apply_highlights(
                 flush()
                 current_entry = entry
             buffer.append(token)
+            emit_boundary(absolute_index + 1)
 
         flush()
+        emit_boundary(end_index)
 
         for fragment in fragments:
             node.insert_before(fragment)
 
         node.extract()
+
+    if boundary_highlights:
+        fallback_parent: Tag | None = None
+        if node_infos:
+            fallback_parent = node_infos[-1]["node"].parent
+        if fallback_parent is None:
+            fallback_parent = soup.body or soup
+
+        for boundary_index in sorted(boundary_highlights.keys()):
+            entries = boundary_highlights[boundary_index]
+            for entry in entries:
+                fallback_parent.append(
+                    _create_marker_tag(soup, entry, "\u00a0")
+                )
 
     return str(soup)
 
@@ -243,11 +460,15 @@ def _build_diff(
         elif tag == "insert":
             if j1 == j2:
                 continue
-            diff_id = f"diff-{diff_index}"
+            diff_number = diff_index
+            diff_id = f"diff-{diff_number}"
             diff_index += 1
             inserted_tokens += j2 - j1
             inserted_raw = "".join(modified_tokens[j1:j2])
             inserted_escaped = _escape_tokens(modified_tokens[j1:j2])
+            modified_location = _summarize_location(
+                modified_soup, modified_node_infos, j1
+            )
             diff_parts.append(
                 f'<ins class="diff-insert" data-diff-id="{diff_id}">{inserted_escaped}</ins>'
             )
@@ -257,7 +478,20 @@ def _build_diff(
                     type="insert",
                     original_text="",
                     modified_text=inserted_raw,
+                    modified_location=modified_location,
                 )
+            )
+            highlight_map["original"].append(
+                {
+                    "id": diff_id,
+                    "type": "insert",
+                    "role": "original",
+                    "start": i1,
+                    "end": i1,
+                    "label": DIFF_TYPE_LABELS["insert"],
+                    "number": diff_number,
+                    "placeholder": True,
+                }
             )
             highlight_map["modified"].append(
                 {
@@ -266,16 +500,22 @@ def _build_diff(
                     "role": "modified",
                     "start": j1,
                     "end": j2,
+                    "label": DIFF_TYPE_LABELS["insert"],
+                    "number": diff_number,
                 }
             )
         elif tag == "delete":
             if i1 == i2:
                 continue
-            diff_id = f"diff-{diff_index}"
+            diff_number = diff_index
+            diff_id = f"diff-{diff_number}"
             diff_index += 1
             deleted_tokens += i2 - i1
             deleted_raw = "".join(original_tokens[i1:i2])
             deleted_escaped = _escape_tokens(original_tokens[i1:i2])
+            original_location = _summarize_location(
+                original_soup, original_node_infos, i1
+            )
             diff_parts.append(
                 f'<del class="diff-delete" data-diff-id="{diff_id}">{deleted_escaped}</del>'
             )
@@ -285,6 +525,7 @@ def _build_diff(
                     type="delete",
                     original_text=deleted_raw,
                     modified_text="",
+                    original_location=original_location,
                 )
             )
             highlight_map["original"].append(
@@ -294,17 +535,26 @@ def _build_diff(
                     "role": "original",
                     "start": i1,
                     "end": i2,
+                    "label": DIFF_TYPE_LABELS["delete"],
+                    "number": diff_number,
                 }
             )
         elif tag == "replace":
             if i1 == i2 and j1 == j2:
                 continue
-            diff_id = f"diff-{diff_index}"
+            diff_number = diff_index
+            diff_id = f"diff-{diff_number}"
             diff_index += 1
             removed_raw = "".join(original_tokens[i1:i2])
             added_raw = "".join(modified_tokens[j1:j2])
             removed_escaped = _escape_tokens(original_tokens[i1:i2])
             added_escaped = _escape_tokens(modified_tokens[j1:j2])
+            original_location = _summarize_location(
+                original_soup, original_node_infos, i1
+            )
+            modified_location = _summarize_location(
+                modified_soup, modified_node_infos, j1
+            )
 
             if i1 != i2:
                 diff_parts.append(
@@ -317,6 +567,8 @@ def _build_diff(
                         "role": "original",
                         "start": i1,
                         "end": i2,
+                        "label": DIFF_TYPE_LABELS["replace"],
+                        "number": diff_number,
                     }
                 )
             if j1 != j2:
@@ -330,6 +582,8 @@ def _build_diff(
                         "role": "modified",
                         "start": j1,
                         "end": j2,
+                        "label": DIFF_TYPE_LABELS["replace"],
+                        "number": diff_number,
                     }
                 )
 
@@ -340,6 +594,8 @@ def _build_diff(
                     type="replace",
                     original_text=removed_raw,
                     modified_text=added_raw,
+                    original_location=original_location,
+                    modified_location=modified_location,
                 )
             )
 
