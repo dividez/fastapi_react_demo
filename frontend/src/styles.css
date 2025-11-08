@@ -19,6 +19,19 @@ body {
   padding: 32px 24px 64px;
   display: flex;
   flex-direction: column;
+}
+
+.page__layout {
+  flex: 1;
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+
+.page__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 24px;
 }
 
@@ -28,6 +41,12 @@ body {
   align-items: flex-end;
   gap: 24px;
   flex-wrap: wrap;
+}
+
+.page__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .page__header h1 {
@@ -41,6 +60,42 @@ body {
   margin: 8px 0 0;
   color: #4c5862;
   font-size: 15px;
+}
+
+.module-status {
+  align-self: flex-start;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(36, 80, 255, 0.08);
+  color: #2b3f8c;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.edit-toggle {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(36, 80, 255, 0.24);
+  background: rgba(36, 80, 255, 0.08);
+  color: #1d2f70;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.edit-toggle:hover {
+  background: rgba(36, 80, 255, 0.16);
+}
+
+.edit-toggle--active {
+  background: #1f2f60;
+  border-color: #1f2f60;
+  color: #fff;
+}
+
+.edit-toggle--active:hover {
+  background: #1a274f;
 }
 
 .upload-button {
@@ -78,6 +133,96 @@ body {
   cursor: not-allowed;
 }
 
+.module-menu {
+  width: 256px;
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 18px;
+  padding: 24px 20px;
+  box-shadow: 0 18px 45px rgba(20, 28, 60, 0.12);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.module-menu__header h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.module-menu__header p {
+  margin: 0;
+  color: #5a6470;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.module-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.module-menu__item {
+  border: none;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.module-menu__item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(36, 80, 255, 0.14);
+  background: #f6f7ff;
+}
+
+.module-menu__item--active {
+  background: linear-gradient(135deg, #2450ff 0%, #5f7dff 100%);
+  color: #fff;
+  box-shadow: 0 16px 32px rgba(36, 80, 255, 0.24);
+}
+
+.module-menu__item--active .module-menu__item-subtitle {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.module-menu__item--planned {
+  position: relative;
+}
+
+.module-menu__item-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.module-menu__item-subtitle {
+  font-size: 13px;
+  color: #5a6470;
+  line-height: 1.6;
+}
+
+.module-menu__item-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(36, 80, 255, 0.16);
+  color: #2640a0;
+}
+
+.module-menu__item--active .module-menu__item-badge {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
 .banner {
   padding: 12px 16px;
   border-radius: 8px;
@@ -111,6 +256,9 @@ body {
   padding: 20px;
   border-radius: 18px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .contract-sheet {
@@ -127,12 +275,105 @@ body {
   letter-spacing: 0.01em;
 }
 
+.editor-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 12px;
+  padding: 14px 18px;
+  box-shadow: 0 12px 24px rgba(20, 33, 60, 0.12);
+  border: 1px solid rgba(30, 45, 80, 0.08);
+}
+
+.editor-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.editor-toolbar__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4c5862;
+  min-width: 48px;
+}
+
+.editor-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toolbar-button {
+  border: 1px solid rgba(30, 45, 80, 0.15);
+  background: #fff;
+  color: #1f2430;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.toolbar-button:hover:not(:disabled) {
+  background: rgba(36, 80, 255, 0.1);
+  border-color: rgba(36, 80, 255, 0.4);
+  color: #20307a;
+}
+
+.toolbar-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.toolbar-button--active {
+  background: rgba(36, 80, 255, 0.16);
+  border-color: rgba(36, 80, 255, 0.6);
+  color: #1a2f71;
+}
+
 .contract-sheet--loading {
   opacity: 0.6;
 }
 
 .contract-sheet .ProseMirror {
   outline: none;
+  font-variant-numeric: lining-nums tabular-nums;
+  counter-reset: h2-counter h3-counter h4-counter;
+}
+
+.module-placeholder {
+  width: 100%;
+  max-width: 720px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 30px 60px rgba(30, 45, 80, 0.12);
+  color: #1f2430;
+  line-height: 1.8;
+}
+
+.module-placeholder h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.module-placeholder p {
+  margin: 0 0 12px;
+  color: #4c5862;
+}
+
+.module-placeholder ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #2b3f8c;
+}
+
+.module-placeholder li + li {
+  margin-top: 8px;
 }
 
 .contract-sheet .ProseMirror > * + * {
@@ -147,7 +388,10 @@ body {
 .contract-sheet .ProseMirror p {
   margin: 0 0 14px;
   text-indent: 2em;
-  line-height: 1.8;
+  line-height: 1.85;
+  text-align: justify;
+  text-justify: inter-ideograph;
+  word-break: break-word;
 }
 
 .contract-sheet .ProseMirror p:first-child {
@@ -177,14 +421,65 @@ body {
   font-size: 22px;
   border-bottom: 1px solid rgba(30, 45, 80, 0.15);
   padding-bottom: 6px;
+  position: relative;
+  padding-left: 2.8em;
 }
 
 .contract-sheet .ProseMirror h3 {
   font-size: 18px;
+  position: relative;
+  padding-left: 2.8em;
 }
 
 .contract-sheet .ProseMirror h4 {
   font-size: 16px;
+  position: relative;
+  padding-left: 2.8em;
+}
+
+.contract-sheet .ProseMirror h2::before,
+.contract-sheet .ProseMirror h3::before,
+.contract-sheet .ProseMirror h4::before {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-weight: 600;
+  color: #1a2f71;
+  width: 2.4em;
+  display: inline-block;
+  text-align: right;
+}
+
+.contract-sheet .ProseMirror h1 {
+  counter-reset: h2-counter h3-counter h4-counter;
+}
+
+.contract-sheet .ProseMirror h2 {
+  counter-reset: h3-counter h4-counter;
+}
+
+.contract-sheet .ProseMirror h2::before {
+  counter-increment: h2-counter;
+  content: counter(h2-counter, cjk-ideographic) "、";
+}
+
+.contract-sheet .ProseMirror h3 {
+  counter-reset: h4-counter;
+}
+
+.contract-sheet .ProseMirror h3::before {
+  counter-increment: h3-counter;
+  content: counter(h2-counter, decimal) "." counter(h3-counter, decimal) " ";
+}
+
+.contract-sheet .ProseMirror h4::before {
+  counter-increment: h4-counter;
+  content:
+    counter(h2-counter, decimal) "." counter(h3-counter, decimal) "." counter(
+      h4-counter,
+      decimal
+    )
+    " ";
 }
 
 .contract-sheet .ProseMirror strong {
@@ -205,18 +500,47 @@ body {
 .contract-sheet .ProseMirror ul,
 .contract-sheet .ProseMirror ol {
   margin: 0 0 14px;
-  padding-left: 2.5em;
-  line-height: 1.8;
+  padding-left: 2.8em;
+  line-height: 1.85;
+  text-indent: 0;
 }
 
 .contract-sheet .ProseMirror ol ol,
 .contract-sheet .ProseMirror ul ul {
   margin: 8px 0;
+  padding-left: 2.2em;
 }
 
 .contract-sheet .ProseMirror li {
   margin: 6px 0;
   text-indent: 0;
+}
+
+.contract-sheet .ProseMirror ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+}
+
+.contract-sheet .ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
+.contract-sheet .ProseMirror ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.contract-sheet .ProseMirror ul {
+  list-style-type: disc;
+  list-style-position: outside;
+}
+
+.contract-sheet .ProseMirror ul ul {
+  list-style-type: circle;
+}
+
+.contract-sheet .ProseMirror li::marker {
+  font-weight: 600;
+  color: #1f2f60;
 }
 
 .contract-sheet .ProseMirror blockquote {
@@ -268,8 +592,51 @@ body {
 }
 
 @media (max-width: 960px) {
+  .page {
+    padding: 24px 16px 48px;
+  }
+
+  .page__layout {
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .page__header {
+    align-items: flex-start;
+  }
+
+  .page__actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .module-menu {
+    width: 100%;
+  }
+
+  .module-menu__list {
+    flex-direction: column;
+  }
+
+  .module-menu__item {
+    width: 100%;
+  }
+
   .contract-sheet {
     width: 100%;
     padding: 40px 28px;
+  }
+
+  .editor-toolbar {
+    width: 100%;
+  }
+
+  .paper-shadow {
+    padding: 24px 18px;
+    gap: 14px;
+  }
+
+  .module-placeholder {
+    padding: 24px;
   }
 }

@@ -6,6 +6,7 @@ from typing import Annotated
 import mammoth
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 app = FastAPI(title="Word to Tiptap Converter")
 
@@ -35,10 +36,20 @@ SUPPORTED_MIME_TYPES = {
 }
 
 
-@app.post("/convert")
+class ConversionNote(BaseModel):
+    type: str
+    message: str
+
+
+class ConversionResponse(BaseModel):
+    html: str
+    notes: list[ConversionNote] = []
+
+
+@app.post("/convert", response_model=ConversionResponse)
 async def convert_word(
     file: Annotated[UploadFile, File(description=".docx file to convert")]
-) -> dict[str, str]:
+) -> ConversionResponse:
     if not file.filename.lower().endswith(".docx"):
         raise HTTPException(status_code=400, detail="Only .docx files are supported")
 
@@ -57,14 +68,14 @@ async def convert_word(
 
     html_content = result.value.strip()
 
-    notes = []
+    notes: list[ConversionNote] = []
     if result.messages:
         notes = [
-            {"type": message.type, "message": message.message}
+            ConversionNote(type=message.type, message=message.message)
             for message in result.messages
         ]
 
-    return {"html": html_content, "notes": notes}
+    return ConversionResponse(html=html_content, notes=notes)
 
 
 @app.get("/health")
