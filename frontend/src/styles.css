@@ -49,6 +49,19 @@ body {
   gap: 12px;
 }
 
+.contract-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.contract-editor__meta {
+  margin: 10px 0 0;
+  color: #566175;
+  font-size: 14px;
+}
+
 .page__header h1 {
   margin: 0;
   font-size: 28px;
@@ -246,6 +259,11 @@ body {
   color: #2b3f8c;
 }
 
+.banner--success {
+  background: #e8f6ed;
+  color: #1f6f45;
+}
+
 .page__content {
   display: flex;
   justify-content: center;
@@ -343,6 +361,38 @@ body {
   outline: none;
   font-variant-numeric: lining-nums tabular-nums;
   counter-reset: h2-counter h3-counter h4-counter;
+}
+
+.contract-sheet--editable .ProseMirror {
+  cursor: text;
+  min-height: 840px;
+}
+
+.export-button {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(30, 45, 80, 0.18);
+  background: #fff;
+  color: #1f2430;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.export-button:hover:not(:disabled) {
+  background: rgba(36, 80, 255, 0.08);
+  border-color: rgba(36, 80, 255, 0.45);
+  color: #1f2f70;
+  transform: translateY(-1px);
+}
+
+.export-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
 }
 
 .module-placeholder {

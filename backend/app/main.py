@@ -2,18 +2,26 @@ from __future__ import annotations
 
 import html
 import io
+import json
 import re
 import unicodedata
 from typing import Annotated, Literal
+from urllib.parse import quote
 
 import mammoth
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from collections import defaultdict
 
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString, Tag
+from docx import Document
+from docx.shared import Pt
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
 
 app = FastAPI(title="Word to Tiptap Converter")
 
@@ -81,6 +89,12 @@ class DiffResponse(BaseModel):
     diff_items: list[DiffItem] = []
     original_notes: list[ConversionNote] = []
     modified_notes: list[ConversionNote] = []
+
+
+class ExportRequest(BaseModel):
+    content: str
+    format: Literal["docx", "pdf", "json"]
+    filename: str | None = None
 
 
 DIFF_TYPE_LABELS: dict[str, str] = {
@@ -208,6 +222,168 @@ def _truncate_text(value: str, limit: int = 80) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 1] + "…"
+
+
+EXPORT_BLOCK_TAGS: tuple[str, ...] = (
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "p",
+    "li",
+    "blockquote",
+    "pre",
+    "code",
+    "table",
+)
+
+
+def _sanitize_filename(value: str | None) -> str:
+    if not value:
+        return "合同导入编辑"
+    sanitized = re.sub(r"[\\/:*?\"<>|]", "_", value)
+    sanitized = re.sub(r"\s+", " ", sanitized).strip()
+    return sanitized or "合同导入编辑"
+
+
+def _html_to_plaintext_lines(html_content: str) -> list[str]:
+    soup = BeautifulSoup(html_content or "", "html.parser")
+    body = soup.body or soup
+    lines: list[str] = []
+
+    for block in body.find_all(EXPORT_BLOCK_TAGS):
+        separator = "\n" if block.name in {"pre", "code"} else " "
+        text = block.get_text(separator, strip=True)
+        if text == "":
+            lines.append("")
+            continue
+        parts = text.splitlines() or [""]
+        lines.extend(parts)
+
+    if not lines:
+        fallback = (body.get_text("\n", strip=True) or "").splitlines()
+        if fallback:
+            lines.extend(fallback)
+        else:
+            lines.append("")
+
+    return [line.rstrip("\r") for line in lines]
+
+
+def _render_docx_document(html_content: str) -> io.BytesIO:
+    document = Document()
+    soup = BeautifulSoup(html_content or "", "html.parser")
+    body = soup.body or soup
+    blocks = body.find_all(EXPORT_BLOCK_TAGS)
+
+    if not blocks:
+        document.add_paragraph("")
+
+    for block in blocks:
+        separator = "\n" if block.name in {"pre", "code"} else " "
+        text = block.get_text(separator, strip=True)
+
+        if block.name.startswith("h") and len(block.name) == 2 and block.name[1].isdigit():
+            level = max(0, min(int(block.name[1]) - 1, 4))
+            document.add_heading(text or "", level=level)
+            continue
+
+        if block.name == "li":
+            parent = block.parent if isinstance(block.parent, Tag) else None
+            style = "List Number" if parent and parent.name == "ol" else "List Bullet"
+            document.add_paragraph(text or "", style=style)
+            continue
+
+        if block.name in {"pre", "code"}:
+            paragraph = document.add_paragraph()
+            content = text.splitlines() or [""]
+            for index, line in enumerate(content):
+                run = paragraph.add_run(line)
+                run.font.name = "Courier New"
+                run.font.size = Pt(10)
+                if index < len(content) - 1:
+                    run.add_break()
+            if not content:
+                paragraph.add_run("")
+            continue
+
+        if block.name == "blockquote":
+            paragraph = document.add_paragraph(text or "")
+            if "Intense Quote" in document.styles:
+                paragraph.style = "Intense Quote"
+            continue
+
+        if block.name == "table":
+            rows = block.find_all("tr")
+            if not rows:
+                continue
+            max_cols = max((len(row.find_all(["th", "td"])) for row in rows), default=0)
+            if max_cols == 0:
+                continue
+            table = document.add_table(rows=len(rows), cols=max_cols)
+            for row_index, row in enumerate(rows):
+                cells = row.find_all(["th", "td"])
+                for col_index, cell in enumerate(cells):
+                    if col_index >= max_cols:
+                        break
+                    table.cell(row_index, col_index).text = cell.get_text(" ", strip=True)
+            document.add_paragraph("")
+            continue
+
+        document.add_paragraph(text or "")
+
+    buffer = io.BytesIO()
+    document.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def _render_pdf_document(html_content: str) -> io.BytesIO:
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    _, height = A4
+    margin = 25 * mm
+    text_object = pdf.beginText(margin, height - margin)
+    text_object.setFont("Helvetica", 12)
+
+    for line in _html_to_plaintext_lines(html_content):
+        if text_object.getY() <= margin:
+            pdf.drawText(text_object)
+            pdf.showPage()
+            text_object = pdf.beginText(margin, height - margin)
+            text_object.setFont("Helvetica", 12)
+        text_object.textLine(line)
+
+    pdf.drawText(text_object)
+    pdf.save()
+    buffer.seek(0)
+    return buffer
+
+
+def _render_json_document(html_content: str) -> io.BytesIO:
+    lines = _html_to_plaintext_lines(html_content)
+    plain_text = "\n".join(lines)
+    payload = {
+        "html": html_content or "",
+        "plain_text": plain_text,
+        "character_count": len(plain_text.replace("\n", "")),
+        "line_count": len(lines),
+    }
+    buffer = io.BytesIO(json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
+    buffer.seek(0)
+    return buffer
+
+
+def _build_file_response(data: bytes, media_type: str, filename: str) -> StreamingResponse:
+    response = StreamingResponse(iter([data]), media_type=media_type)
+    response.headers["Content-Length"] = str(len(data))
+    utf8_filename = quote(filename)
+    response.headers[
+        "Content-Disposition"
+    ] = f"attachment; filename=\"{filename}\"; filename*=UTF-8''{utf8_filename}"
+    return response
 
 
 def _find_block_node(node: NavigableString) -> Tag | None:
@@ -670,6 +846,34 @@ async def diff_word_documents(
         original_notes=original_notes,
         modified_notes=modified_notes,
     )
+
+
+@app.post("/export")
+async def export_document(request: ExportRequest) -> StreamingResponse:
+    format_name = request.format.lower()
+    filename = _sanitize_filename(request.filename)
+    html_content = request.content or ""
+
+    if format_name == "docx":
+        buffer = _render_docx_document(html_content)
+        media_type = (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        extension = "docx"
+    elif format_name == "pdf":
+        buffer = _render_pdf_document(html_content)
+        media_type = "application/pdf"
+        extension = "pdf"
+    elif format_name == "json":
+        buffer = _render_json_document(html_content)
+        media_type = "application/json"
+        extension = "json"
+    else:  # pragma: no cover - guarded by pydantic validation
+        raise HTTPException(status_code=400, detail="Unsupported export format")
+
+    download_name = f"{filename}.{extension}"
+    data = buffer.getvalue()
+    return _build_file_response(data, media_type, download_name)
 
 
 @app.get("/health")
