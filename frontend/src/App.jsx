@@ -1,6 +1,7 @@
 import { useState } from "react";
 import clsx from "clsx";
 import WordPreview from "./modules/word-preview/WordPreview.jsx";
+import ContractEditor from "./modules/contract-editor/ContractEditor.jsx";
 import BilingualEditor from "./modules/bilingual/BilingualEditor.jsx";
 import DocDiffDemo from "./modules/doc-diff/DocDiffDemo.jsx";
 import PlannedModule from "./modules/planned/PlannedModule.jsx";
@@ -9,6 +10,14 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 const MODULES = [
+  {
+    id: "contract-editor",
+    name: "合同导入编辑",
+    subtitle:
+      "导入 Word 合同后可在网页中直接修改，并一键导出 Word/PDF/JSON。",
+    status: "ready",
+    component: ContractEditor,
+  },
   {
     id: "word-preview",
     name: "Word 导入预览",
