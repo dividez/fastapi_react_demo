@@ -5,6 +5,7 @@ import ContractEditor from "./modules/contract-editor/ContractEditor.jsx";
 import BilingualEditor from "./modules/bilingual/BilingualEditor.jsx";
 import DocDiffDemo from "./modules/doc-diff/DocDiffDemo.jsx";
 import PlannedModule from "./modules/planned/PlannedModule.jsx";
+import ContractEditorDemo from "./modules/contract-editor-demo/ContractEditorDemo.jsx";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -25,6 +26,14 @@ const MODULES = [
       "支持 Word (.docx) 上传，自动转换为接近原稿的排版，仅展示正文内容。",
     status: "ready",
     component: WordPreview,
+  },
+  {
+    id: "contract-editor-demo",
+    name: "多写法合同 Markdown Demo",
+    subtitle:
+      "演示 Markdown 协议到 Tiptap 编辑器的映射，并支持段落多写法一键切换。",
+    status: "ready",
+    component: ContractEditorDemo,
   },
   {
     id: "bilingual-editor",
