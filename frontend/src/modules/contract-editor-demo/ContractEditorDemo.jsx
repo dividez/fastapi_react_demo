@@ -108,7 +108,10 @@ const mdInlineToNodes = (line) => {
 
   while ((match = boldRegex.exec(line))) {
     if (match.index > lastIndex) {
-      nodes.push({ type: "text", text: line.slice(lastIndex, match.index) });
+      const text = line.slice(lastIndex, match.index);
+      if (text) {
+        nodes.push({ type: "text", text });
+      }
     }
     nodes.push({
       type: "text",
@@ -119,11 +122,10 @@ const mdInlineToNodes = (line) => {
   }
 
   if (lastIndex < line.length) {
-    nodes.push({ type: "text", text: line.slice(lastIndex) });
-  }
-
-  if (!nodes.length) {
-    nodes.push({ type: "text", text: "" });
+    const text = line.slice(lastIndex);
+    if (text) {
+      nodes.push({ type: "text", text });
+    }
   }
 
   return nodes;
@@ -134,11 +136,26 @@ const mdTextToInlineWithBreaks = (md) => {
   const lines = (md || "").split(/\n/);
 
   lines.forEach((line, index) => {
-    content.push(...mdInlineToNodes(line));
+    const lineNodes = mdInlineToNodes(line);
+    // 过滤掉空的 text 节点
+    const validNodes = lineNodes.filter(
+      (node) => node.type !== "text" || (node.text && node.text.length > 0)
+    );
+    
+    if (validNodes.length > 0) {
+      content.push(...validNodes);
+    }
+    
+    // 如果不是最后一行，添加换行符
     if (index < lines.length - 1) {
       content.push({ type: "hardBreak" });
     }
   });
+
+  // 如果内容为空，至少返回一个空格，避免空的 text 节点
+  if (content.length === 0) {
+    return [{ type: "text", text: " " }];
+  }
 
   return content;
 };
@@ -244,6 +261,50 @@ const VariantParagraphView = (props) => {
   );
 };
 
+const parseMultiLineMarkdown = (text) => {
+  const lines = (text || "").split(/\n/);
+  const blocks = [];
+  let currentParagraph = [];
+
+  const flushParagraph = () => {
+    if (currentParagraph.length > 0) {
+      const paragraphText = currentParagraph.join("\n");
+      const trimmed = paragraphText.trim();
+      if (trimmed) {
+        blocks.push({
+          type: "paragraph",
+          text: paragraphText,
+        });
+      }
+      currentParagraph = [];
+    }
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    const heading = parseSingleLineHeading(trimmed);
+
+    if (heading) {
+      // 如果当前有未完成的段落，先输出
+      flushParagraph();
+      // 添加标题块，保留 inline 节点结构
+      blocks.push({
+        type: "heading",
+        level: heading.level,
+        inline: heading.inline,
+      });
+    } else {
+      // 添加到当前段落
+      currentParagraph.push(line);
+    }
+  });
+
+  // 处理最后一个段落
+  flushParagraph();
+
+  return blocks;
+};
+
 const buildDocFromApi = (data) => {
   const content = [];
 
@@ -273,24 +334,48 @@ const buildDocFromApi = (data) => {
 
     if (b.type === "paragraph") {
       const trimmed = (b.text || "").trim();
-      const heading = parseSingleLineHeading(trimmed);
-      if (heading && !trimmed.includes("\n")) {
-        content.push({
-          type: "heading",
-          attrs: { level: heading.level },
-          content: heading.inline,
+      
+      // 如果包含换行符，尝试解析多行 markdown
+      if (trimmed.includes("\n")) {
+        const parsedBlocks = parseMultiLineMarkdown(b.text);
+        parsedBlocks.forEach((block) => {
+          if (block.type === "heading") {
+            content.push({
+              type: "heading",
+              attrs: { level: block.level },
+              content: block.inline,
+            });
+          } else if (block.type === "paragraph") {
+            const paraText = block.text.trim();
+            if (paraText) {
+              content.push({
+                type: "paragraph",
+                content: mdTextToInlineWithBreaks(block.text),
+              });
+            }
+          }
         });
       } else {
-        content.push({
-          type: "paragraph",
-          content: mdTextToInlineWithBreaks(b.text),
-        });
+        // 单行文本，检查是否是标题
+        const heading = parseSingleLineHeading(trimmed);
+        if (heading) {
+          content.push({
+            type: "heading",
+            attrs: { level: heading.level },
+            content: heading.inline,
+          });
+        } else {
+          content.push({
+            type: "paragraph",
+            content: mdTextToInlineWithBreaks(b.text),
+          });
+        }
       }
     }
   });
 
   if (!content.length) {
-    content.push({ type: "paragraph", content: [{ type: "text", text: "" }] });
+    content.push({ type: "paragraph", content: [{ type: "text", text: " " }] });
   }
 
   return { type: "doc", content };
