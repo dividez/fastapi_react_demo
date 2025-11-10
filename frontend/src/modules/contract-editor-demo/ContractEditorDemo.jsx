@@ -381,7 +381,7 @@ const BASE_EXTENSIONS = [StarterKit.configure({}), VariantParagraph];
 
 const ContractEditorDemo = ({ title, subtitle }) => {
   const [exported, setExported] = useState(
-    "// 点击“导出 JSON”查看当前极简结构 (title + blocks)\n",
+    JSON.stringify(DEMO_DATA, null, 2),
   );
 
   const extensions = useMemo(() => BASE_EXTENSIONS, []);
