@@ -1,0 +1,188 @@
+.variant-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.variant-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.variant-editor__export {
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(30, 45, 80, 0.2);
+  background: linear-gradient(135deg, #fff, #f3f6ff);
+  color: #1f2430;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.variant-editor__export:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(36, 80, 255, 0.18);
+}
+
+.variant-editor__paper {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.95), #edf1ff);
+  border-radius: 24px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 18px 45px rgba(20, 28, 60, 0.12);
+}
+
+.variant-editor__content {
+  width: 816px;
+  min-height: 480px;
+  padding: 48px 64px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(32, 43, 78, 0.16);
+}
+
+.variant-editor__content .ProseMirror {
+  outline: none;
+  font-family: "Noto Serif SC", "Times New Roman", "Songti SC", serif;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #1f2430;
+}
+
+.variant-editor__content .ProseMirror > * + * {
+  margin-top: 0;
+}
+
+.variant-editor__content .ProseMirror p {
+  margin: 0 0 16px;
+  text-indent: 2em;
+}
+
+.variant-editor__content .ProseMirror p:first-child {
+  text-indent: 0;
+}
+
+.variant-editor__content .ProseMirror h1,
+.variant-editor__content .ProseMirror h2,
+.variant-editor__content .ProseMirror h3,
+.variant-editor__content .ProseMirror h4,
+.variant-editor__content .ProseMirror h5,
+.variant-editor__content .ProseMirror h6 {
+  font-family: "Source Han Serif SC", "SimHei", "Microsoft YaHei", sans-serif;
+  font-weight: 600;
+  margin: 24px 0 16px;
+  text-indent: 0;
+  color: #1e2b4f;
+}
+
+.variant-editor__content .ProseMirror h1 {
+  font-size: 30px;
+  text-align: center;
+}
+
+.variant-editor__content .ProseMirror h2 {
+  font-size: 22px;
+  border-bottom: 1px solid rgba(30, 45, 80, 0.2);
+  padding-bottom: 6px;
+}
+
+.variant-editor__content .ProseMirror h3 {
+  font-size: 18px;
+}
+
+.variant-editor__preview {
+  background: rgba(20, 28, 60, 0.92);
+  color: #d0ffef;
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 20px 45px rgba(10, 16, 40, 0.45);
+}
+
+.variant-editor__preview h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #9ef8d1;
+}
+
+.variant-editor__preview pre {
+  margin: 0;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 12px;
+  color: #aef8ff;
+  max-height: 320px;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.variant-editor__preview p {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: rgba(224, 255, 246, 0.8);
+}
+
+.variant-node {
+  position: relative;
+  display: block;
+}
+
+.variant-node__content {
+  min-height: 24px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  transition: background-color 0.2s ease;
+}
+
+.variant-node__content:focus,
+.variant-node__content:hover {
+  background: rgba(255, 214, 102, 0.2);
+}
+
+.variant-node__toolbar {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.variant-node__badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 214, 102, 0.28);
+  color: #8a5a0a;
+  border: 1px solid rgba(255, 214, 102, 0.5);
+}
+
+.variant-node__button {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  background: #ffffff;
+  color: #475569;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.variant-node__button:hover {
+  background: rgba(255, 247, 205, 0.7);
+}
+
+.variant-node__button--active {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #ffffff;
+  border-color: rgba(239, 68, 68, 0.9);
+}
