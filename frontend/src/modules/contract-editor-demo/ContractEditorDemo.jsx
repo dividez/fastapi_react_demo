@@ -43,15 +43,17 @@ const DEMO_DATA = {
     {
       type: "paragraph",
       text:
-        "1. 甲方系依法设立并有效存续的企业，合法持有【目标公司全称】（以下简称“目标公司”）的股份。",
+        "1. 甲方系依法设立并有效存续的企业，合法持有【目标公司全称】（以下简称‘目标公司’）的股份。",
       variants: [
         {
           text:
             "1. 甲方为依中国法律合法设立并存续的企业，合法持有目标公司相关股份。",
+          description: "简化表述，去除占位符，更直接",
         },
         {
           text:
             "1. 甲方系目标公司股东，对其持有之股份享有完全、合法、有效的所有权。",
+          description: "强调所有权属性，表述更严谨",
         },
       ],
       selected: 0,
@@ -64,6 +66,7 @@ const DEMO_DATA = {
         {
           text:
             "2. 乙方具备良好资信及决策程序，同意按照本合同条款受让标的股份。",
+          description: "简化表述，突出资信和决策程序",
         },
       ],
       selected: 0,
@@ -71,11 +74,12 @@ const DEMO_DATA = {
     {
       type: "paragraph",
       text:
-        "3. 甲方有意将其持有的目标公司【】%股份（“标的股份”）转让予乙方，乙方亦同意受让该等标的股份。",
+        "3. 甲方有意将其持有的目标公司【】%股份（\"标的股份\"）转让予乙方，乙方亦同意受让该等标的股份。",
       variants: [
         {
           text:
             "3. 双方同意依本合同约定的条件和程序完成标的股份的转让与交割。",
+          description: "强调双方合意和程序性要求",
         },
       ],
       selected: 0,
@@ -250,9 +254,14 @@ const VariantParagraphView = (props) => {
                 "variant-node__button" +
                 (i === selected ? " variant-node__button--active" : "")
               }
-              title={v.text}
+              title={v.description || v.text}
             >
               方案{i + 1}
+              {v.description && (
+                <span className="variant-node__button-desc">
+                  {v.description}
+                </span>
+              )}
             </button>
           ))}
         </div>
