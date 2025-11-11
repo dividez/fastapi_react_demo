@@ -188,111 +188,44 @@
 }
 
 /* 多级编号列表样式 - 使用 CSS counters() 自动生成多级编号 */
-/* 所有 multi-level-ordered-list 的基础样式 */
-.variant-editor__content .ProseMirror ol.multi-level-ordered-list,
-.variant-editor__content .ProseMirror .multi-level-ordered-list {
+/* 参考 demo 的简洁实现：每个 ol 都重置计数器，所有 li 使用相同的 ::before 规则 */
+/* 使用更通用的选择器，确保匹配所有层级的 ol */
+.multi-level-ordered-list,
+.multi-level-ordered-list ol {
+  counter-reset: item !important;
   list-style: none !important;
-  padding-left: 0;
-  margin: 8px 0;
+  padding-left: 1.8em !important;
+  margin: 2px 0 !important;
 }
 
-/* 只在最外层（直接子元素）重置计数器 */
-.variant-editor__content .ProseMirror > ol.multi-level-ordered-list,
-.variant-editor__content .ProseMirror > .multi-level-ordered-list {
-  counter-reset: item;
-  margin: 16px 0;
-}
-
-/* 嵌套的 ol 元素 - 关键：不要重置计数器，这样才能继承父级编号 */
-/* 使用更具体的选择器确保优先级 */
-.variant-editor__content .ProseMirror .multi-level-ordered-list ol.multi-level-ordered-list,
-.variant-editor__content .ProseMirror ol.multi-level-ordered-list ol.multi-level-ordered-list,
-.variant-editor__content .ProseMirror .multi-level-ordered-list .multi-level-ordered-list,
-.variant-editor__content .ProseMirror li ol.multi-level-ordered-list {
-  /* 关键：不重置 counter-reset，让计数器继承父级 */
-  counter-reset: none !important;
-}
-
-/* 所有列表项 - 第一级 */
-.variant-editor__content .ProseMirror .multi-level-ordered-list > li,
-.variant-editor__content .ProseMirror ol.multi-level-ordered-list > li {
-  display: block;
-  position: relative;
-  padding-left: 2.5em;
-  margin: 8px 0;
-  text-indent: 0;
+/* 确保所有层级的 li 都应用样式 */
+.multi-level-ordered-list li,
+.multi-level-ordered-list ol li {
+  display: block !important;
+  position: relative !important;
+  padding-left: 2.5em !important;
+  margin: 8px 0 !important;
+  text-indent: 0 !important;
   list-style: none !important;
 }
 
-/* 所有列表项的编号 - 第一级 */
-.variant-editor__content .ProseMirror .multi-level-ordered-list > li::before,
-.variant-editor__content .ProseMirror ol.multi-level-ordered-list > li::before {
-  content: counters(item, ".") ". ";
-  counter-increment: item;
-  position: absolute;
-  left: 0;
-  font-weight: 500;
-  color: #1e2b4f;
-  min-width: 2em;
-  text-align: right;
+/* 所有层级的 li::before 使用相同的规则，通过 counters() 自动生成多级编号 */
+.multi-level-ordered-list li::before,
+.multi-level-ordered-list ol li::before {
+  content: counters(item, ".") ". " !important;
+  counter-increment: item !important;
+  position: absolute !important;
+  left: 0 !important;
+  min-width: 2em !important;
+  text-align: right !important;
+  font-variant-numeric: tabular-nums !important;
+  color: #1e2b4f !important;
+  font-weight: 500 !important;
 }
 
-/* 嵌套列表项 */
-.variant-editor__content .ProseMirror .multi-level-ordered-list ol > li,
-.variant-editor__content .ProseMirror ol.multi-level-ordered-list ol > li {
-  display: block;
-  position: relative;
-  padding-left: 3.5em;
-  margin: 6px 0;
-  text-indent: 0;
-  list-style: none !important;
-}
-
-/* 嵌套列表项的编号 */
-.variant-editor__content .ProseMirror .multi-level-ordered-list ol > li::before,
-.variant-editor__content .ProseMirror ol.multi-level-ordered-list ol > li::before {
-  content: counters(item, ".") ". ";
-  counter-increment: item;
-  position: absolute;
-  left: 0;
-  font-weight: 500;
-  color: #1e2b4f;
-  min-width: 3em;
-  text-align: right;
-}
-
-/* 更深层嵌套 */
-.variant-editor__content .ProseMirror .multi-level-ordered-list ol ol > li {
-  padding-left: 4.5em;
-}
-
-.variant-editor__content .ProseMirror .multi-level-ordered-list ol ol > li::before {
-  content: counters(item, ".") ". ";
-  counter-increment: item;
-  position: absolute;
-  left: 0;
-  font-weight: 500;
-  color: #1e2b4f;
-  min-width: 4em;
-  text-align: right;
-}
-
-.variant-editor__content .ProseMirror .multi-level-ordered-list ol ol ol > li {
-  padding-left: 5.5em;
-}
-
-.variant-editor__content .ProseMirror .multi-level-ordered-list ol ol ol > li::before {
-  content: counters(item, ".") ". ";
-  counter-increment: item;
-  position: absolute;
-  left: 0;
-  font-weight: 500;
-  color: #1e2b4f;
-  min-width: 5em;
-  text-align: right;
-}
-
-.variant-editor__content .ProseMirror .multi-level-ordered-list li p {
-  margin: 0;
-  text-indent: 0;
+.multi-level-ordered-list li p,
+.multi-level-ordered-list ol li p {
+  margin: 0 !important;
+  text-indent: 0 !important;
+  display: inline !important;
 }

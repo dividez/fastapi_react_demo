@@ -226,21 +226,50 @@ const VariantParagraph = Node.create({
 });
 
 // 扩展 ListItem 支持 Tab 缩进，同时保留所有原有功能
+// 参考 demo：限制最大 5 层 + Tab/Shift+Tab/Enter 键位行为
 const IndentableListItem = ListItem.extend({
   addKeyboardShortcuts() {
+    const maxLevel = 5;
+
+    // 获取当前列表深度
+    const getListDepth = () => {
+      const { state } = this.editor;
+      const { $from } = state.selection;
+      let depth = 0;
+      for (let i = $from.depth; i > 0; i -= 1) {
+        const node = $from.node(i);
+        if (node.type.name === "bulletList" || node.type.name === "orderedList") {
+          depth += 1;
+        }
+      }
+      return depth;
+    };
+
     return {
       ...this.parent?.(),
+      // Tab 缩进：仅在 listItem 中生效，且不超过 5 层
       Tab: () => {
-        if (this.editor.isActive("listItem")) {
-          return this.editor.commands.sinkListItem("listItem");
-        }
-        return false;
+        if (!this.editor.isActive("listItem")) return false;
+        if (getListDepth() >= maxLevel) return true; // 已达最大层级，吞掉 Tab，保持不变
+        return this.editor.commands.sinkListItem("listItem");
       },
+      // Shift+Tab 提升一层
       "Shift-Tab": () => {
-        if (this.editor.isActive("listItem")) {
-          return this.editor.commands.liftListItem("listItem");
-        }
-        return false;
+        if (!this.editor.isActive("listItem")) return false;
+        return this.editor.commands.liftListItem("listItem");
+      },
+      // Enter：在有序列表中插入下一条 listItem
+      Enter: () => {
+        if (!this.editor.isActive("listItem")) return false;
+        
+        // 在空的顶层 listItem 回车时，交给默认行为从列表退出
+        const { state } = this.editor;
+        const { $from } = state.selection;
+        const currentNode = $from.node($from.depth);
+        const isEmpty = !currentNode.textContent || currentNode.textContent.trim() === "";
+        if (isEmpty && getListDepth() === 1) return false;
+        
+        return this.editor.commands.splitListItem("listItem");
       },
     };
   },
@@ -336,12 +365,14 @@ const VariantParagraphView = (props) => {
 };
 
 const parseOrderedListItem = (line) => {
-  const match = /^(\s*)(\d+)\.\s+(.+)$/.exec(line);
+  const match = /^(\s*)(\d+(?:\.\d+)*)(?:\.)?\s+(.+)$/.exec(line);
   if (!match) return null;
   const indent = match[1].length;
   const number = match[2];
   const content = match[3];
-  const level = Math.floor(indent / 2);
+  const indentLevel = Math.max(Math.floor(indent / 2), 0);
+  const dotLevel = Math.max(number.split(".").length - 1, 0);
+  const level = indentLevel > 0 ? indentLevel : dotLevel;
   return { level, content, number, indent };
 };
 
@@ -375,56 +406,75 @@ const parseMultiLineMarkdown = (text) => {
     }
   };
 
+  const normalizeListLevels = (items) => {
+    if (!items.length) return [];
+    const minLevel = items.reduce(
+      (min, item) => Math.min(min, Math.max(item.level ?? 0, 0)),
+      Infinity,
+    );
+    if (minLevel <= 0) {
+      return items.map((item) => ({
+        ...item,
+        level: Math.max(item.level ?? 0, 0),
+      }));
+    }
+    return items.map((item) => ({
+      ...item,
+      level: Math.max((item.level ?? 0) - minLevel, 0),
+    }));
+  };
+
   const buildNestedList = (items) => {
     if (items.length === 0) return null;
 
-    const rootList = { type: "orderedList", items: [] };
-    const stack = [{ list: rootList, level: -1 }];
+    const normalizedItems = normalizeListLevels(items);
 
-    items.forEach((item) => {
-      const listItem = {
-        type: "listItem",
-        level: item.level,
-        content: item.content,
-      };
+    const walk = (startIndex, currentLevel) => {
+      const list = { type: "orderedList", items: [] };
+      let index = startIndex;
 
-      while (stack.length > 1 && stack[stack.length - 1].level >= item.level) {
-        stack.pop();
-      }
+      while (index < normalizedItems.length) {
+        const currentItem = normalizedItems[index];
+        const itemLevel = Math.max(currentItem.level ?? 0, 0);
 
-      const current = stack[stack.length - 1];
-
-      if (item.level <= current.level) {
-        while (stack.length > 1 && stack[stack.length - 1].level >= item.level) {
-          stack.pop();
+        if (itemLevel < currentLevel) {
+          break;
         }
-        const target = stack[stack.length - 1];
-        target.list.items.push(listItem);
-        stack.push({ list: target.list, level: item.level });
-      } else {
-        let target = current;
-        for (let i = current.level + 1; i < item.level; i++) {
-          const lastItem = target.list.items[target.list.items.length - 1];
-          if (!lastItem) {
-            const emptyItem = { type: "listItem", level: i, content: [{ type: "text", text: " " }] };
-            target.list.items.push(emptyItem);
-            emptyItem.nested = { type: "orderedList", items: [] };
-            target = { list: emptyItem.nested, level: i };
-            stack.push(target);
-          } else {
-            if (!lastItem.nested) {
-              lastItem.nested = { type: "orderedList", items: [] };
-            }
-            target = { list: lastItem.nested, level: i };
-            stack.push(target);
+
+        if (itemLevel > currentLevel) {
+          const prevItem = list.items[list.items.length - 1];
+          if (!prevItem) {
+            list.items.push({
+              type: "listItem",
+              level: currentLevel,
+              content: currentItem.content,
+            });
+            index += 1;
+            continue;
           }
-        }
-        target.list.items.push(listItem);
-        stack.push({ list: target.list, level: item.level });
-      }
-    });
 
-    return rootList;
+          const nestedResult = walk(index, itemLevel);
+          if (nestedResult.list.items.length > 0) {
+            prevItem.nested = nestedResult.list;
+          }
+          index = nestedResult.nextIndex;
+          continue;
+        }
+
+        list.items.push({
+          type: "listItem",
+          level: itemLevel,
+          content: currentItem.content,
+        });
+        index += 1;
+      }
+
+      return { list, nextIndex: index };
+    };
+
+    const startLevel = normalizedItems[0]?.level ?? 0;
+    const { list } = walk(0, startLevel);
+    return list;
   };
 
   lines.forEach((line) => {
@@ -594,44 +644,54 @@ const inlineToMarkdown = (content = []) => {
   return out;
 };
 
-const listToMarkdown = (listNode, level = 0) => {
+const listToMarkdown = (listNode, level = 0, numberPath = []) => {
   if (!listNode || listNode.type !== "orderedList") {
     return "";
   }
 
   const lines = [];
   const indent = "  ".repeat(level);
-  let itemNumber = 1;
 
-  (listNode.content || []).forEach((item) => {
+  (listNode.content || []).forEach((item, index) => {
     if (item.type !== "listItem") return;
 
-    const itemContent = [];
+    const numberingPath = [...numberPath, index + 1];
+    const label = numberingPath.join(".");
+
+    const paragraphs = [];
+    const childLists = [];
+
     (item.content || []).forEach((contentNode) => {
       if (contentNode.type === "paragraph") {
         const text = inlineToMarkdown(contentNode.content || []);
         if (text.trim()) {
-          itemContent.push(text);
+          paragraphs.push(text);
         }
       } else if (contentNode.type === "orderedList") {
-        const nestedMarkdown = listToMarkdown(contentNode, level + 1);
-        if (nestedMarkdown) {
-          itemContent.push(nestedMarkdown);
-        }
+        childLists.push(contentNode);
       }
     });
 
-    if (itemContent.length > 0) {
-      const mainText = itemContent[0];
-      lines.push(`${indent}${itemNumber}. ${mainText}`);
-      
-      if (itemContent.length > 1) {
-        for (let i = 1; i < itemContent.length; i++) {
-          lines.push(itemContent[i]);
-        }
+    const mainText = paragraphs.shift() || "";
+    const currentLine = mainText
+      ? `${indent}${label}. ${mainText}`
+      : `${indent}${label}.`;
+    lines.push(currentLine.trimEnd());
+
+    paragraphs.forEach((extra) => {
+      lines.push(`${indent}${extra}`);
+    });
+
+    childLists.forEach((childList) => {
+      const nestedMarkdown = listToMarkdown(
+        childList,
+        level + 1,
+        numberingPath,
+      );
+      if (nestedMarkdown) {
+        lines.push(nestedMarkdown);
       }
-      itemNumber++;
-    }
+    });
   });
 
   return lines.join("\n");
@@ -709,6 +769,29 @@ const runSelfTests = () => {
   if (!testDoc.content || testDoc.content.length === 0) {
     console.error("[SelfTest] Markdown 段落未被解析为内容", testDoc);
   }
+
+  const multiListMd = ["1. 顶级", "  1.1 次级", "    1.1.1 三级"].join("\n");
+  const listDoc = buildDocFromApi({
+    title: "t",
+    blocks: [{ type: "paragraph", text: multiListMd }],
+  });
+  const multiListNode = (listDoc.content || []).find(
+    (node) => node.type === "orderedList",
+  );
+  if (!multiListNode) {
+    console.error("[SelfTest] 多级列表未解析为 orderedList");
+  } else {
+    const hasNestedList = multiListNode.content?.some((item) =>
+      (item.content || []).some((child) => child.type === "orderedList"),
+    );
+    if (!hasNestedList) {
+      console.error("[SelfTest] 多级列表未生成嵌套结构", multiListNode);
+    }
+    const preview = listToMarkdown(multiListNode);
+    if (!/1\.1/.test(preview) || !/1\.1\.1/.test(preview)) {
+      console.error("[SelfTest] 多级列表导出未包含多层编号", preview);
+    }
+  }
 };
 
 runSelfTests();
@@ -775,6 +858,27 @@ const ContractEditorDemo = ({ title, subtitle }) => {
     setExported(JSON.stringify(apiDoc, null, 2));
   };
 
+  const onDebugHTML = () => {
+    if (!editor) return;
+    const html = editor.getHTML();
+    console.log("=== 编辑器 HTML 结构 ===");
+    console.log(html);
+    
+    // 检查是否有 multi-level-ordered-list class
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = html;
+    const allOl = tempDiv.querySelectorAll("ol");
+    console.log(`找到 ${allOl.length} 个 ol 元素`);
+    allOl.forEach((ol, index) => {
+      console.log(`ol[${index}]:`, {
+        className: ol.className,
+        hasClass: ol.classList.contains("multi-level-ordered-list"),
+        children: ol.children.length,
+        html: ol.outerHTML.substring(0, 200),
+      });
+    });
+  };
+
   return (
     <>
       <header className="page__header">
@@ -785,6 +889,9 @@ const ContractEditorDemo = ({ title, subtitle }) => {
         <div className="variant-editor__actions">
           <button className="variant-editor__export" onClick={onExport}>
             导出 JSON
+          </button>
+          <button className="variant-editor__export" onClick={onDebugHTML}>
+            调试 HTML
           </button>
         </div>
       </header>
