@@ -186,3 +186,113 @@
   color: #ffffff;
   border-color: rgba(239, 68, 68, 0.9);
 }
+
+/* 多级编号列表样式 - 使用 CSS counters() 自动生成多级编号 */
+/* 所有 multi-level-ordered-list 的基础样式 */
+.variant-editor__content .ProseMirror ol.multi-level-ordered-list,
+.variant-editor__content .ProseMirror .multi-level-ordered-list {
+  list-style: none !important;
+  padding-left: 0;
+  margin: 8px 0;
+}
+
+/* 只在最外层（直接子元素）重置计数器 */
+.variant-editor__content .ProseMirror > ol.multi-level-ordered-list,
+.variant-editor__content .ProseMirror > .multi-level-ordered-list {
+  counter-reset: item;
+  margin: 16px 0;
+}
+
+/* 嵌套的 ol 元素 - 关键：不要重置计数器，这样才能继承父级编号 */
+/* 使用更具体的选择器确保优先级 */
+.variant-editor__content .ProseMirror .multi-level-ordered-list ol.multi-level-ordered-list,
+.variant-editor__content .ProseMirror ol.multi-level-ordered-list ol.multi-level-ordered-list,
+.variant-editor__content .ProseMirror .multi-level-ordered-list .multi-level-ordered-list,
+.variant-editor__content .ProseMirror li ol.multi-level-ordered-list {
+  /* 关键：不重置 counter-reset，让计数器继承父级 */
+  counter-reset: none !important;
+}
+
+/* 所有列表项 - 第一级 */
+.variant-editor__content .ProseMirror .multi-level-ordered-list > li,
+.variant-editor__content .ProseMirror ol.multi-level-ordered-list > li {
+  display: block;
+  position: relative;
+  padding-left: 2.5em;
+  margin: 8px 0;
+  text-indent: 0;
+  list-style: none !important;
+}
+
+/* 所有列表项的编号 - 第一级 */
+.variant-editor__content .ProseMirror .multi-level-ordered-list > li::before,
+.variant-editor__content .ProseMirror ol.multi-level-ordered-list > li::before {
+  content: counters(item, ".") ". ";
+  counter-increment: item;
+  position: absolute;
+  left: 0;
+  font-weight: 500;
+  color: #1e2b4f;
+  min-width: 2em;
+  text-align: right;
+}
+
+/* 嵌套列表项 */
+.variant-editor__content .ProseMirror .multi-level-ordered-list ol > li,
+.variant-editor__content .ProseMirror ol.multi-level-ordered-list ol > li {
+  display: block;
+  position: relative;
+  padding-left: 3.5em;
+  margin: 6px 0;
+  text-indent: 0;
+  list-style: none !important;
+}
+
+/* 嵌套列表项的编号 */
+.variant-editor__content .ProseMirror .multi-level-ordered-list ol > li::before,
+.variant-editor__content .ProseMirror ol.multi-level-ordered-list ol > li::before {
+  content: counters(item, ".") ". ";
+  counter-increment: item;
+  position: absolute;
+  left: 0;
+  font-weight: 500;
+  color: #1e2b4f;
+  min-width: 3em;
+  text-align: right;
+}
+
+/* 更深层嵌套 */
+.variant-editor__content .ProseMirror .multi-level-ordered-list ol ol > li {
+  padding-left: 4.5em;
+}
+
+.variant-editor__content .ProseMirror .multi-level-ordered-list ol ol > li::before {
+  content: counters(item, ".") ". ";
+  counter-increment: item;
+  position: absolute;
+  left: 0;
+  font-weight: 500;
+  color: #1e2b4f;
+  min-width: 4em;
+  text-align: right;
+}
+
+.variant-editor__content .ProseMirror .multi-level-ordered-list ol ol ol > li {
+  padding-left: 5.5em;
+}
+
+.variant-editor__content .ProseMirror .multi-level-ordered-list ol ol ol > li::before {
+  content: counters(item, ".") ". ";
+  counter-increment: item;
+  position: absolute;
+  left: 0;
+  font-weight: 500;
+  color: #1e2b4f;
+  min-width: 5em;
+  text-align: right;
+}
+
+.variant-editor__content .ProseMirror .multi-level-ordered-list li p {
+  margin: 0;
+  text-indent: 0;
+}

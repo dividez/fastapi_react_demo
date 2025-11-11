@@ -8,6 +8,8 @@ import {
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Node, mergeAttributes } from "@tiptap/core";
+import OrderedList from "@tiptap/extension-ordered-list";
+import ListItem from "@tiptap/extension-list-item";
 
 const DEMO_DATA = {
   title: "股份转让合同（示例，多级 Markdown）",
@@ -99,6 +101,21 @@ const DEMO_DATA = {
         "1.3 **转让价款**：指乙方向甲方支付的用于受让标的股份的对价金额，具体金额及支付安排以本合同第三条及相关附件约定为准。",
         "",
         "（以下条款仅作示例，可继续扩展……）",
+      ].join("\n"),
+    },
+    {
+      type: "paragraph",
+      text: [
+        "## 四、多级编号示例",
+        "",
+        "1. 第一级项目",
+        "  1.1 第二级项目",
+        "  1.2 第二级项目",
+        "  1.3 第二级项目",
+        "2. 另一个第一级项目",
+        "  2.1 第二级项目",  
+        "  2.2 第二级项目",
+        "  2.3 第二级项目",
       ].join("\n"),
     },
   ],
@@ -208,6 +225,54 @@ const VariantParagraph = Node.create({
   },
 });
 
+// 扩展 ListItem 支持 Tab 缩进，同时保留所有原有功能
+const IndentableListItem = ListItem.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      Tab: () => {
+        if (this.editor.isActive("listItem")) {
+          return this.editor.commands.sinkListItem("listItem");
+        }
+        return false;
+      },
+      "Shift-Tab": () => {
+        if (this.editor.isActive("listItem")) {
+          return this.editor.commands.liftListItem("listItem");
+        }
+        return false;
+      },
+    };
+  },
+});
+
+const MultiLevelOrderedList = OrderedList.extend({
+  name: "orderedList",
+  
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["orderedList"],
+        attributes: {
+          class: {
+            default: "multi-level-ordered-list",
+          },
+        },
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "ol",
+      mergeAttributes(HTMLAttributes, {
+        class: "multi-level-ordered-list",
+      }),
+      0,
+    ];
+  },
+});
+
 const VariantParagraphView = (props) => {
   const { node, editor, updateAttributes, getPos } = props;
   const variants = node.attrs.variants || [];
@@ -270,10 +335,21 @@ const VariantParagraphView = (props) => {
   );
 };
 
+const parseOrderedListItem = (line) => {
+  const match = /^(\s*)(\d+)\.\s+(.+)$/.exec(line);
+  if (!match) return null;
+  const indent = match[1].length;
+  const number = match[2];
+  const content = match[3];
+  const level = Math.floor(indent / 2);
+  return { level, content, number, indent };
+};
+
 const parseMultiLineMarkdown = (text) => {
   const lines = (text || "").split(/\n/);
   const blocks = [];
   let currentParagraph = [];
+  let listItems = [];
 
   const flushParagraph = () => {
     if (currentParagraph.length > 0) {
@@ -289,29 +365,139 @@ const parseMultiLineMarkdown = (text) => {
     }
   };
 
+  const flushList = () => {
+    if (listItems.length > 0) {
+      const list = buildNestedList(listItems);
+      if (list) {
+        blocks.push(list);
+      }
+      listItems = [];
+    }
+  };
+
+  const buildNestedList = (items) => {
+    if (items.length === 0) return null;
+
+    const rootList = { type: "orderedList", items: [] };
+    const stack = [{ list: rootList, level: -1 }];
+
+    items.forEach((item) => {
+      const listItem = {
+        type: "listItem",
+        level: item.level,
+        content: item.content,
+      };
+
+      while (stack.length > 1 && stack[stack.length - 1].level >= item.level) {
+        stack.pop();
+      }
+
+      const current = stack[stack.length - 1];
+
+      if (item.level <= current.level) {
+        while (stack.length > 1 && stack[stack.length - 1].level >= item.level) {
+          stack.pop();
+        }
+        const target = stack[stack.length - 1];
+        target.list.items.push(listItem);
+        stack.push({ list: target.list, level: item.level });
+      } else {
+        let target = current;
+        for (let i = current.level + 1; i < item.level; i++) {
+          const lastItem = target.list.items[target.list.items.length - 1];
+          if (!lastItem) {
+            const emptyItem = { type: "listItem", level: i, content: [{ type: "text", text: " " }] };
+            target.list.items.push(emptyItem);
+            emptyItem.nested = { type: "orderedList", items: [] };
+            target = { list: emptyItem.nested, level: i };
+            stack.push(target);
+          } else {
+            if (!lastItem.nested) {
+              lastItem.nested = { type: "orderedList", items: [] };
+            }
+            target = { list: lastItem.nested, level: i };
+            stack.push(target);
+          }
+        }
+        target.list.items.push(listItem);
+        stack.push({ list: target.list, level: item.level });
+      }
+    });
+
+    return rootList;
+  };
+
   lines.forEach((line) => {
     const trimmed = line.trim();
     const heading = parseSingleLineHeading(trimmed);
+    const listItem = parseOrderedListItem(line);
 
     if (heading) {
-      // 如果当前有未完成的段落，先输出
+      flushList();
       flushParagraph();
-      // 添加标题块，保留 inline 节点结构
       blocks.push({
         type: "heading",
         level: heading.level,
         inline: heading.inline,
       });
+    } else if (listItem) {
+      flushParagraph();
+      listItems.push({
+        level: listItem.level,
+        content: mdInlineToNodes(listItem.content),
+      });
+    } else if (trimmed === "") {
+      if (listItems.length > 0) {
+        flushList();
+      } else {
+        flushParagraph();
+      }
     } else {
-      // 添加到当前段落
+      if (listItems.length > 0) {
+        flushList();
+      }
       currentParagraph.push(line);
     }
   });
 
-  // 处理最后一个段落
+  flushList();
   flushParagraph();
 
   return blocks;
+};
+
+const convertListToTipTap = (list) => {
+  if (!list || list.type !== "orderedList" || !list.items || list.items.length === 0) {
+    return null;
+  }
+
+  const items = [];
+  
+  list.items.forEach((item) => {
+    const listItemContent = [
+      {
+        type: "paragraph",
+        content: item.content || [{ type: "text", text: " " }],
+      },
+    ];
+
+    if (item.nested && item.nested.items && item.nested.items.length > 0) {
+      const nestedList = convertListToTipTap(item.nested);
+      if (nestedList) {
+        listItemContent.push(nestedList);
+      }
+    }
+
+    items.push({
+      type: "listItem",
+      content: listItemContent,
+    });
+  });
+
+  return {
+    type: "orderedList",
+    content: items,
+  };
 };
 
 const buildDocFromApi = (data) => {
@@ -354,6 +540,11 @@ const buildDocFromApi = (data) => {
               attrs: { level: block.level },
               content: block.inline,
             });
+          } else if (block.type === "orderedList") {
+            const tipTapList = convertListToTipTap(block);
+            if (tipTapList) {
+              content.push(tipTapList);
+            }
           } else if (block.type === "paragraph") {
             const paraText = block.text.trim();
             if (paraText) {
@@ -403,6 +594,49 @@ const inlineToMarkdown = (content = []) => {
   return out;
 };
 
+const listToMarkdown = (listNode, level = 0) => {
+  if (!listNode || listNode.type !== "orderedList") {
+    return "";
+  }
+
+  const lines = [];
+  const indent = "  ".repeat(level);
+  let itemNumber = 1;
+
+  (listNode.content || []).forEach((item) => {
+    if (item.type !== "listItem") return;
+
+    const itemContent = [];
+    (item.content || []).forEach((contentNode) => {
+      if (contentNode.type === "paragraph") {
+        const text = inlineToMarkdown(contentNode.content || []);
+        if (text.trim()) {
+          itemContent.push(text);
+        }
+      } else if (contentNode.type === "orderedList") {
+        const nestedMarkdown = listToMarkdown(contentNode, level + 1);
+        if (nestedMarkdown) {
+          itemContent.push(nestedMarkdown);
+        }
+      }
+    });
+
+    if (itemContent.length > 0) {
+      const mainText = itemContent[0];
+      lines.push(`${indent}${itemNumber}. ${mainText}`);
+      
+      if (itemContent.length > 1) {
+        for (let i = 1; i < itemContent.length; i++) {
+          lines.push(itemContent[i]);
+        }
+      }
+      itemNumber++;
+    }
+  });
+
+  return lines.join("\n");
+};
+
 const exportToApi = (editor) => {
   const json = editor.getJSON();
   const blocks = [];
@@ -431,6 +665,14 @@ const exportToApi = (editor) => {
         variants: node.attrs?.variants || [],
         selected: node.attrs?.selected ?? 0,
       });
+      return;
+    }
+
+    if (node.type === "orderedList") {
+      const markdown = listToMarkdown(node);
+      if (markdown) {
+        pushParagraph(markdown);
+      }
       return;
     }
 
@@ -471,7 +713,16 @@ const runSelfTests = () => {
 
 runSelfTests();
 
-const BASE_EXTENSIONS = [StarterKit.configure({}), VariantParagraph];
+const BASE_EXTENSIONS = [
+  StarterKit.configure({
+    orderedList: false,
+    listItem: false, // 禁用 StarterKit 的 listItem，使用我们扩展的
+    // 确保其他功能正常
+  }),
+  MultiLevelOrderedList,
+  IndentableListItem, // 使用扩展的 ListItem（包含 Tab 快捷键和所有原有功能）
+  VariantParagraph,
+];
 
 const ContractEditorDemo = ({ title, subtitle }) => {
   const [exported, setExported] = useState(
@@ -480,9 +731,11 @@ const ContractEditorDemo = ({ title, subtitle }) => {
 
   const extensions = useMemo(() => BASE_EXTENSIONS, []);
 
+  const initialContent = useMemo(() => buildDocFromApi(DEMO_DATA), []);
+
   const editor = useEditor({
     extensions,
-    content: buildDocFromApi(DEMO_DATA),
+    content: initialContent,
     editorProps: {
       attributes: {
         class: "variant-editor__content",
@@ -492,6 +745,16 @@ const ContractEditorDemo = ({ title, subtitle }) => {
 
   useEffect(() => {
     if (!editor) return;
+
+    const setInitialContent = () => {
+      try {
+        editor.commands.setContent(initialContent, false);
+      } catch (error) {
+        console.error("设置编辑器内容失败:", error);
+      }
+    };
+
+    setInitialContent();
 
     const updateExport = () => {
       const apiDoc = exportToApi(editor);
@@ -504,7 +767,7 @@ const ContractEditorDemo = ({ title, subtitle }) => {
     return () => {
       editor.off("update", updateExport);
     };
-  }, [editor]);
+  }, [editor, initialContent]);
 
   const onExport = () => {
     if (!editor) return;
