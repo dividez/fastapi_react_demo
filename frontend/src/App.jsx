@@ -6,6 +6,7 @@ import BilingualEditor from "./modules/bilingual/BilingualEditor.jsx";
 import DocDiffDemo from "./modules/doc-diff/DocDiffDemo.jsx";
 import PlannedModule from "./modules/planned/PlannedModule.jsx";
 import ContractEditorDemo from "./modules/contract-editor-demo/ContractEditorDemo.jsx";
+import AiEditor from "./modules/ai-editor/AiEditor.jsx";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001";
@@ -49,6 +50,14 @@ const MODULES = [
       "上传原稿与修改稿，自动转换为可阅读排版并生成差异高亮视图。",
     status: "ready",
     component: DocDiffDemo,
+  },
+  {
+    id: "ai-editor",
+    name: "AI 智能写作编辑器",
+    subtitle:
+      "仿 Word 操作体验，支持划句生成、改写与扩写等智能写作能力。",
+    status: "ready",
+    component: AiEditor,
   },
 ];
 

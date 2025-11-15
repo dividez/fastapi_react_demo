@@ -1,24 +1,26 @@
 from __future__ import annotations
 
+import asyncio
 import html
 import io
 import json
 import re
 import unicodedata
-from typing import Annotated, Literal
+import uuid
+from collections import defaultdict
+from enum import Enum
+from typing import Annotated, AsyncGenerator, Literal
 from urllib.parse import quote
 
 import mammoth
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from collections import defaultdict
-
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString, Tag
 from docx import Document
 from docx.shared import Pt
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
@@ -102,6 +104,139 @@ DIFF_TYPE_LABELS: dict[str, str] = {
     "delete": "删除",
     "replace": "修改",
 }
+
+
+class AiAction(str, Enum):
+    GENERATE = "generate"
+    REWRITE = "rewrite"
+    EXPAND = "expand"
+
+
+def _format_sse(*, data: str, event: str | None = None, event_id: str | None = None) -> str:
+    """Format payload in SSE wire format."""
+
+    lines: list[str] = []
+    if event_id:
+        lines.append(f"id: {event_id}")
+    if event:
+        lines.append(f"event: {event}")
+    payload_lines = data.splitlines() or [""]
+    lines.extend(f"data: {line}" for line in payload_lines)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _chunk_text(text: str, chunk_size: int = 48) -> list[str]:
+    """Split text into balanced chunks for streaming."""
+
+    if chunk_size <= 0:
+        return [text]
+    return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)] or [""]
+
+
+def _simulate_ai_response(action: AiAction, text: str) -> str:
+    clean_text = text.strip()
+    if not clean_text:
+        return "请选择一段文本后再试。"
+
+    if action is AiAction.GENERATE:
+        return (
+            f"基于「{clean_text}」生成的新句子：为确保条款清晰，"
+            "双方应在签署后十个工作日内完成约定事项。"
+        )
+
+    if action is AiAction.REWRITE:
+        rewritten = (
+            clean_text.replace("应当", "应")
+            .replace("不得", "严禁")
+            .replace("立即", "立刻")
+            .replace("双方", "双方各方")
+            .replace("保证", "确保")
+        )
+        if rewritten == clean_text:
+            return f"经优化表述：{clean_text}"
+        return rewritten
+
+    if action is AiAction.EXPAND:
+        return (
+            f"{clean_text}。为提升条款的可执行性，建议补充具体时间节点、责任划分"
+            "以及必要的沟通机制，确保各项义务能够有效落实。"
+        )
+
+    return clean_text
+
+
+@app.get("/ai/editor/stream")
+async def stream_ai_editor(
+    action: AiAction,
+    text: str = "",
+    request_id: str | None = None,
+) -> StreamingResponse:
+    """Stream AI results for the editor via SSE."""
+
+    clean_text = text.strip()
+    resolved_request_id = request_id or uuid.uuid4().hex
+
+    async def event_publisher() -> AsyncGenerator[str, None]:
+        yield "retry: 3000\n\n"
+        start_payload = {
+            "requestId": resolved_request_id,
+            "action": action.value,
+            "receivedText": clean_text,
+        }
+        yield _format_sse(
+            data=json.dumps(start_payload, ensure_ascii=False),
+            event="start",
+            event_id=f"{resolved_request_id}:0",
+        )
+
+        if not clean_text:
+            done_payload = {
+                "requestId": resolved_request_id,
+                "status": "empty",
+                "message": "请选择一段文本后再试。",
+            }
+            yield _format_sse(
+                data=json.dumps(done_payload, ensure_ascii=False),
+                event="done",
+                event_id=f"{resolved_request_id}:1",
+            )
+            return
+
+        ai_result = _simulate_ai_response(action, clean_text)
+        chunks = _chunk_text(ai_result)
+
+        for index, chunk in enumerate(chunks, start=1):
+            chunk_payload = {
+                "requestId": resolved_request_id,
+                "content": chunk,
+                "index": index,
+                "total": len(chunks),
+            }
+            yield _format_sse(
+                data=json.dumps(chunk_payload, ensure_ascii=False),
+                event="chunk",
+                event_id=f"{resolved_request_id}:{index}",
+            )
+            await asyncio.sleep(0.18)
+
+        done_payload = {
+            "requestId": resolved_request_id,
+            "status": "completed",
+            "result": ai_result,
+            "totalChunks": len(chunks),
+        }
+        yield _format_sse(
+            data=json.dumps(done_payload, ensure_ascii=False),
+            event="done",
+            event_id=f"{resolved_request_id}:{len(chunks) + 1}",
+        )
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(event_publisher(), media_type="text/event-stream", headers=headers)
 
 
 def _ensure_docx(file: UploadFile) -> None:
