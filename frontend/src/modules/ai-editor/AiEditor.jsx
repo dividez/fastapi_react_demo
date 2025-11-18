@@ -1,27 +1,93 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
+import { Markdown } from "@tiptap/markdown";
 import clsx from "clsx";
 
 import "./ai-editor.css";
 
-const initialContent = `
-  <h1>智能合同写作助手</h1>
-  <p>在这里体验接近 Word 的编辑体验，选中句子后即可调用 AI 进行改写、扩写或生成新内容。</p>
-  <h2>功能示例</h2>
-  <p>1. 选中条款后点击“改写”按钮，可生成更正式或更精简的表达。</p>
-  <p>2. 使用“扩写”功能，为合同条款补充背景说明与细节。</p>
-  <p>3. 通过“生成”快速创作新的条款草稿，再自行调整语气。</p>
-  <h2>常用条款</h2>
-  <h3>保密义务</h3>
-  <p>双方应对在合作中获知的商业秘密予以严格保密，未经另一方书面许可不得向任何第三方披露。</p>
-  <h3>违约责任</h3>
-  <p>若一方违反本协议的关键义务，应在收到通知之日起十个工作日内采取补救措施并承担因此产生的损失。</p>
-`;
+const contractMarkdown = `# 房屋租赁合同
+
+# 合同主体  
+出租方：{{出租方名称|text|}}  
+承租方：{{承租方名称|text|}}
+
+## 一、租赁房屋  
+1.房屋地址：{{房屋地址|text|}}  
+2.建筑面积：{{建筑面积|text|}}平方米  
+3.房产证编号：{{房产证编号|text|}}  
+4.房屋用途：居住  
+
+## 二、租赁期限  
+5.租赁期限为1年  
+6.起租日：{{起租年份|text|}}年{{起租月份|text|}}月{{起租日|text|}}日  
+7.到期日：{{到期年份|text|}}年{{到期月份|text|}}月{{到期日|text|}}日  
+
+## 三、租金标准  
+8.每月租金：{{月租金金额|text|}}元（含税）  
+9.租金支付方式：季付  
+10.首期租金支付时间：签约后3日内支付  
+
+## 四、押金条款  
+11.押金金额：1个月租金，计与月租金等额元  
+
+## 五、费用承担  
+12.出租方承担：房产税  
+13.承租方承担：水电费  
+
+## 六、房屋维护  
+14.日常维修由承租方负责  
+15.大修由出租方承担  
+
+## 七、转租条款  
+16.禁止转租  
+
+## 八、续约条件  
+17.租期届满前1个月提出书面申请  
+
+## 九、违约责任  
+18.逾期付款违约金：日0.05%  
+19.其他违约情形：{{其他违约情形|text|}}  
+
+## 十、合同解除  
+20.无责解约权：{{无责解约权|text|}}  
+21.其他解除条件：{{其他解除条件|text|}}  
+
+## 十一、附件  
+22.附件1 房屋交接清单  
+23.附件2 房屋权属证明文件  
+
+## 十二、签署条款  
+24.本合同自双方签字盖章之日起生效  
+
+# 附件1 房屋交接清单  
+
+## 一、房屋现状确认  
+1.房屋现状：{{房屋现状描述|text|}}  
+
+## 二、设备设施清单  
+2.设备设施清单：{{设备设施清单|text|}}  
+
+## 三、钥匙交接记录  
+3.钥匙交接记录：{{钥匙交接记录|text|}}  
+
+## 四、水电表读数记录  
+4.水电表读数记录：  
+   - 水表读数：{{水表读数|text|}}  
+   - 电表读数：{{电表读数|text|}}  
+
+# 附件2 房屋权属证明文件  
+
+## 一、房产证复印件  
+1.房产证复印件：{{房产证复印件|text|}}  
+
+## 二、出租方身份证明文件  
+2.出租方身份证明文件：{{出租方身份证明文件|text|}}`;
 
 const AI_ACTIONS = [
   { id: "generate", label: "划句生成", description: "基于选中语句生成新的表述" },
@@ -57,6 +123,7 @@ const parseEventData = (event) => {
 
 export default function AiEditor({ title, subtitle, apiBaseUrl }) {
   const [selectedText, setSelectedText] = useState("");
+  const [selectedClause, setSelectedClause] = useState({ heading: "", text: "" });
   const [aiRequests, setAiRequests] = useState([]);
   const [activeRequestId, setActiveRequestId] = useState("");
   const eventSourceRef = useRef({ source: null, requestId: null });
@@ -74,6 +141,29 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
     eventSourceRef.current = { source: null, requestId: null };
   };
 
+  const getClauseContext = (instance) => {
+    const { doc, selection } = instance.state;
+    const from = selection.from;
+    let clauseStart = 0;
+    let clauseEnd = doc.content.size;
+    let currentHeading = { text: "", level: 1 };
+
+    doc.descendants((node, pos) => {
+      if (node.type.name === "heading") {
+        if (pos <= from) {
+          currentHeading = { text: node.textContent, level: node.attrs.level };
+          clauseStart = pos;
+          clauseEnd = doc.content.size;
+        } else if (pos > from && node.attrs.level <= currentHeading.level && clauseEnd === doc.content.size) {
+          clauseEnd = pos;
+        }
+      }
+    });
+
+    const clauseText = doc.textBetween(clauseStart, clauseEnd, "\n", "\n").trim();
+    return { heading: currentHeading.text, text: clauseText };
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -89,22 +179,34 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
       Placeholder.configure({
         placeholder: "像在 Word 里一样输入内容，或选中句子尝试 AI 功能…",
       }),
+      Markdown.configure({
+        transformPastedText: true,
+      }),
     ],
-    content: initialContent,
+    content: contractMarkdown,
+    editorProps: {
+      attributes: {
+        class: "ai-editor__tiptap",
+      },
+    },
     onSelectionUpdate({ editor: instance }) {
       const { from, to } = instance.state.selection;
       const text = instance.state.doc.textBetween(from, to, " ");
       setSelectedText(text.trim());
+      setSelectedClause(getClauseContext(instance));
     },
   });
 
   useEffect(() => {
     if (!editor) return undefined;
 
+    setSelectedClause(getClauseContext(editor));
+
     const handleTransaction = () => {
       const { from, to } = editor.state.selection;
       const text = editor.state.doc.textBetween(from, to, " ");
       setSelectedText(text.trim());
+      setSelectedClause(getClauseContext(editor));
     };
 
     editor.on("update", handleTransaction);
@@ -144,7 +246,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
           result: "请选择一段文本后再试。",
           range: { from: selection.from, to: selection.to },
           error: null,
-          meta: null,
+          meta: { clause: selectedClause },
         },
         ...prev,
       ]);
@@ -160,7 +262,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
       result: "",
       range: { from: selection.from, to: selection.to },
       error: null,
-      meta: null,
+      meta: { clause: selectedClause },
     };
     setAiRequests((prev) => [newRequest, ...prev]);
     setActiveRequestId(requestId);
@@ -256,6 +358,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
             status: "done",
             result: payload?.result ?? item.result,
             error: null,
+            meta: payload?.meta ?? item.meta,
           };
         })
       );
@@ -332,11 +435,38 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
               当前选中：
               {selectedText ? `「${selectedText}」` : "请选择句子以调用 AI"}
             </span>
+            {selectedClause.text && (
+              <span className="ai-editor__clause-info">
+                所属条款：{selectedClause.heading || "未命名条款"}
+              </span>
+            )}
           </div>
         </div>
 
         <div className="ai-editor__workspace">
           <div className="ai-editor__canvas">
+            {editor && (
+              <BubbleMenu
+                editor={editor}
+                tippyOptions={{ duration: 100 }}
+                className="ai-editor__bubble"
+              >
+                <div className="ai-editor__bubble-actions">
+                  {AI_ACTIONS.map((action) => (
+                    <button
+                      key={action.id}
+                      type="button"
+                      className="ai-editor__bubble-button"
+                      onClick={() => triggerAi(action.id)}
+                      disabled={isAiBusy}
+                    >
+                      <span>{action.label}</span>
+                      <small>{action.description}</small>
+                    </button>
+                  ))}
+                </div>
+              </BubbleMenu>
+            )}
             <EditorContent editor={editor} className="ai-editor__content" />
           </div>
           <aside className="ai-editor__assistant">
@@ -369,6 +499,11 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
                     <span className="ai-editor__assistant-input">
                       {activeRequest.input ? `基于「${activeRequest.input}」的建议` : "请选择文本"}
                     </span>
+                    {activeRequest?.meta?.clause?.text && (
+                      <span className="ai-editor__assistant-clause">
+                        条款范围：{activeRequest.meta.clause.heading || "未命名条款"}
+                      </span>
+                    )}
                   </div>
                   <div className="ai-editor__assistant-output">
                     {activeRequest.status === "error" ? (
