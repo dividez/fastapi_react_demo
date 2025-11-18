@@ -17,6 +17,8 @@ from bs4 import BeautifulSoup
 from bs4.element import NavigableString, Tag
 from docx import Document
 from docx.shared import Pt
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -104,6 +106,16 @@ DIFF_TYPE_LABELS: dict[str, str] = {
     "delete": "删除",
     "replace": "修改",
 }
+
+
+class AiTransformRequest(BaseModel):
+    mode: Literal["rewrite", "expand", "rephrase", "custom"]
+    markdown: str
+    user_instruction: str | None = None
+
+
+class MarkdownPayload(BaseModel):
+    markdown: str
 
 
 class AiAction(str, Enum):
@@ -530,6 +542,207 @@ def _build_file_response(data: bytes, media_type: str, filename: str) -> Streami
         "Content-Disposition"
     ] = f"attachment; filename=\"{filename}\"; filename*=UTF-8''{utf8_filename}"
     return response
+
+
+def _markdown_to_blocks(markdown: str) -> list[dict[str, object]]:
+    blocks: list[dict[str, object]] = []
+    lines = (markdown or "").splitlines()
+
+    current_paragraph: list[str] = []
+    current_list: dict[str, object] | None = None
+
+    def flush_paragraph() -> None:
+        nonlocal current_paragraph
+        text = " ".join(part.strip() for part in current_paragraph if part.strip()).strip()
+        if text:
+            blocks.append({"type": "paragraph", "text": text})
+        current_paragraph = []
+
+    def flush_list() -> None:
+        nonlocal current_list
+        if current_list and current_list.get("items"):
+            blocks.append(current_list)
+        current_list = None
+
+    for raw_line in lines:
+        line = raw_line.rstrip()
+        if not line.strip():
+            flush_paragraph()
+            flush_list()
+            continue
+
+        heading_match = re.match(r"^(#+)\s+(.*)", line)
+        if heading_match:
+            flush_paragraph()
+            flush_list()
+            level = len(heading_match.group(1))
+            text = heading_match.group(2).strip()
+            blocks.append({"type": "heading", "level": min(level, 5), "text": text})
+            continue
+
+        numbered_heading = re.match(r"^(\d+(?:\.\d+)*)\.\s+(.*)", line)
+        if numbered_heading:
+            flush_paragraph()
+            flush_list()
+            depth = numbered_heading.group(1).count(".") + 1
+            text = numbered_heading.group(2).strip()
+            blocks.append({"type": "heading", "level": min(depth, 5), "text": text})
+            continue
+
+        ordered_item = re.match(r"^\s*(\d+)[.)]\s+(.*)", line)
+        if ordered_item:
+            if current_list is None or current_list.get("type") != "ordered_list":
+                flush_paragraph()
+                flush_list()
+                current_list = {"type": "ordered_list", "items": []}
+            current_list["items"].append(ordered_item.group(2).strip())
+            continue
+
+        bullet_item = re.match(r"^\s*[-*+]\s+(.*)", line)
+        if bullet_item:
+            if current_list is None or current_list.get("type") != "bullet_list":
+                flush_paragraph()
+                flush_list()
+                current_list = {"type": "bullet_list", "items": []}
+            current_list["items"].append(bullet_item.group(1).strip())
+            continue
+
+        current_paragraph.append(line)
+
+    flush_paragraph()
+    flush_list()
+    return blocks
+
+
+def _blocks_to_html(blocks: list[dict[str, object]]) -> str:
+    parts: list[str] = []
+
+    for block in blocks:
+        if block.get("type") == "heading":
+            level = int(block.get("level", 1))
+            text = html.escape(str(block.get("text", "")))
+            level = max(1, min(level, 6))
+            parts.append(f"<h{level}>{text}</h{level}>")
+            continue
+
+        if block.get("type") == "ordered_list":
+            items = "".join(
+                f"<li>{html.escape(str(item))}</li>" for item in block.get("items", [])
+            )
+            parts.append(f"<ol>{items}</ol>")
+            continue
+
+        if block.get("type") == "bullet_list":
+            items = "".join(
+                f"<li>{html.escape(str(item))}</li>" for item in block.get("items", [])
+            )
+            parts.append(f"<ul>{items}</ul>")
+            continue
+
+        text = html.escape(str(block.get("text", "")))
+        if text:
+            parts.append(f"<p>{text}</p>")
+
+    return "\n".join(parts)
+
+
+def _ensure_heading_numbering(document: Document) -> int:
+    numbering_part = document.part.numbering_part
+    numbering = numbering_part.numbering_definitions._numbering
+
+    existing_ids = [
+        int(num.get(qn("w:numId")))
+        for num in numbering.findall(qn("w:num"))
+        if num.get(qn("w:numId"))
+    ]
+    num_id = max(existing_ids or [0]) + 1
+    abstract_num_id = num_id + 99
+
+    abstract_num = OxmlElement("w:abstractNum")
+    abstract_num.set(qn("w:abstractNumId"), str(abstract_num_id))
+
+    multi_level = OxmlElement("w:multiLevelType")
+    multi_level.set(qn("w:val"), "hybridMultilevel")
+    abstract_num.append(multi_level)
+
+    for level in range(5):
+        lvl = OxmlElement("w:lvl")
+        lvl.set(qn("w:ilvl"), str(level))
+
+        start = OxmlElement("w:start")
+        start.set(qn("w:val"), "1")
+        lvl.append(start)
+
+        num_fmt = OxmlElement("w:numFmt")
+        num_fmt.set(qn("w:val"), "decimal")
+        lvl.append(num_fmt)
+
+        lvl_text = OxmlElement("w:lvlText")
+        lvl_text.set(qn("w:val"), "%{}.".format(level + 1))
+        lvl.append(lvl_text)
+
+        p_style = OxmlElement("w:pStyle")
+        p_style.set(qn("w:val"), f"Heading {level + 1}")
+        lvl.append(p_style)
+
+        indent = OxmlElement("w:ind")
+        indent.set(qn("w:left"), str(360 * level))
+        lvl.append(indent)
+
+        abstract_num.append(lvl)
+
+    numbering.append(abstract_num)
+
+    num = OxmlElement("w:num")
+    num.set(qn("w:numId"), str(num_id))
+    abstract_num_id_el = OxmlElement("w:abstractNumId")
+    abstract_num_id_el.set(qn("w:val"), str(abstract_num_id))
+    num.append(abstract_num_id_el)
+    numbering.append(num)
+    return num_id
+
+
+def _attach_numbering(paragraph, num_id: int, level: int) -> None:
+    num_pr = OxmlElement("w:numPr")
+    ilvl = OxmlElement("w:ilvl")
+    ilvl.set(qn("w:val"), str(max(0, level)))
+    numid = OxmlElement("w:numId")
+    numid.set(qn("w:val"), str(num_id))
+    num_pr.append(ilvl)
+    num_pr.append(numid)
+    paragraph._p.get_or_add_pPr().append(num_pr)
+
+
+def _render_docx_from_blocks(blocks: list[dict[str, object]]) -> io.BytesIO:
+    document = Document()
+    numbering_id = _ensure_heading_numbering(document)
+
+    for block in blocks or []:
+        if block.get("type") == "heading":
+            level = int(block.get("level", 1))
+            style_level = max(1, min(level, 5))
+            paragraph = document.add_paragraph(
+                str(block.get("text", "")), style=f"Heading {style_level}"
+            )
+            _attach_numbering(paragraph, numbering_id, style_level - 1)
+            continue
+
+        if block.get("type") == "ordered_list":
+            for item in block.get("items", []):
+                document.add_paragraph(str(item), style="List Number")
+            continue
+
+        if block.get("type") == "bullet_list":
+            for item in block.get("items", []):
+                document.add_paragraph(str(item), style="List Bullet")
+            continue
+
+        document.add_paragraph(str(block.get("text", "")))
+
+    buffer = io.BytesIO()
+    document.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 
 def _find_block_node(node: NavigableString) -> Tag | None:
@@ -1020,6 +1233,44 @@ async def export_document(request: ExportRequest) -> StreamingResponse:
     download_name = f"{filename}.{extension}"
     data = buffer.getvalue()
     return _build_file_response(data, media_type, download_name)
+
+
+@app.post("/api/ai/transform")
+def ai_transform(request: AiTransformRequest) -> dict[str, str]:
+    content = request.markdown.strip()
+    if not content:
+        return {"markdown": ""}
+
+    if request.mode == "rewrite":
+        return {"markdown": f"[改写示例]\n{content}"}
+
+    if request.mode == "expand":
+        return {
+            "markdown": f"{content}\n\n扩写示例文本：增加履约节点、违约责任和沟通机制以确保条款可执行。"
+        }
+
+    if request.mode == "rephrase":
+        return {"markdown": f"[重写示例] {content}"}
+
+    safe_instruction = (request.user_instruction or "自定义指令").strip()
+    return {
+        "markdown": f"根据指令（{safe_instruction}）完成示例改写：\n{content}"
+    }
+
+
+@app.post("/api/export/docx")
+def export_docx(payload: MarkdownPayload) -> StreamingResponse:
+    blocks = _markdown_to_blocks(payload.markdown)
+    html_content = _blocks_to_html(blocks)
+    buffer = _render_docx_from_blocks(blocks)
+
+    filename = _sanitize_filename("合同AI导出") + ".docx"
+    data = buffer.getvalue()
+    return _build_file_response(
+        data,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=filename,
+    )
 
 
 @app.get("/health")
