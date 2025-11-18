@@ -80,6 +80,39 @@
   color: #1f2430;
 }
 
+.ai-editor__preview {
+  margin-top: 28px;
+  border: 1px dashed rgba(36, 80, 255, 0.26);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(245, 248, 255, 0.85), rgba(255, 255, 255, 0.95));
+  overflow: hidden;
+}
+
+.ai-editor__preview-header {
+  padding: 14px 16px 8px;
+  border-bottom: 1px solid rgba(36, 80, 255, 0.12);
+}
+
+.ai-editor__preview-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #1f2f60;
+}
+
+.ai-editor__preview-header p {
+  margin: 6px 0 0;
+  color: #566175;
+  font-size: 12px;
+}
+
+.ai-editor__preview-body {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f2430;
+  line-height: 1.7;
+  font-size: 14px;
+}
+
 .ai-editor__content p {
   margin: 0 0 16px;
 }

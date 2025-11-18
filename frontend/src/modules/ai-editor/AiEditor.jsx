@@ -126,6 +126,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
   const [selectedClause, setSelectedClause] = useState({ heading: "", text: "" });
   const [aiRequests, setAiRequests] = useState([]);
   const [activeRequestId, setActiveRequestId] = useState("");
+  const [renderedHtml, setRenderedHtml] = useState("");
   const eventSourceRef = useRef({ source: null, requestId: null });
 
   const endpointBase = useMemo(() => {
@@ -183,6 +184,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
         transformPastedText: true,
       }),
     ],
+    contentType: "markdown",
     content: contractMarkdown,
     editorProps: {
       attributes: {
@@ -201,12 +203,14 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
     if (!editor) return undefined;
 
     setSelectedClause(getClauseContext(editor));
+    setRenderedHtml(editor.getHTML());
 
     const handleTransaction = () => {
       const { from, to } = editor.state.selection;
       const text = editor.state.doc.textBetween(from, to, " ");
       setSelectedText(text.trim());
       setSelectedClause(getClauseContext(editor));
+      setRenderedHtml(editor.getHTML());
     };
 
     editor.on("update", handleTransaction);
@@ -468,6 +472,17 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
               </BubbleMenu>
             )}
             <EditorContent editor={editor} className="ai-editor__content" />
+
+            <div className="ai-editor__preview">
+              <div className="ai-editor__preview-header">
+                <h3>Markdown → HTML 渲染</h3>
+                <p>初始 Markdown 已转换为 HTML 并按合同样式展示。</p>
+              </div>
+              <div
+                className="ai-editor__preview-body"
+                dangerouslySetInnerHTML={{ __html: renderedHtml }}
+              />
+            </div>
           </div>
           <aside className="ai-editor__assistant">
             <div className="ai-editor__assistant-header">
