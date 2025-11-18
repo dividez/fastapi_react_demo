@@ -138,10 +138,20 @@ export default function ContractDraftModule({ title, subtitle, apiBaseUrl }: Con
   return (
     <div className="ai-contract-page">
       <header className="ai-contract-header">
-        <div>
-          <p className="badge">第八模块 · AI 合同起草</p>
-          <h1>{title}</h1>
-          <p className="subtitle">{subtitle}</p>
+        <div className="ai-contract-hero">
+          <div>
+            <p className="badge">第八模块 · AI 合同起草</p>
+            <div className="ai-contract-hero__title">
+              <h1>{title}</h1>
+              <span className="pill">Notion 风格</span>
+            </div>
+            <p className="subtitle">{subtitle}</p>
+          </div>
+          <div className="ai-contract-meta">
+            <span>⌘/ 快捷输入</span>
+            <span>选中段落唤起 AI 气泡</span>
+            <span>保持编号、占位符结构</span>
+          </div>
         </div>
         <div className="ai-contract-actions">
           <button type="button" onClick={handleExportHtml} className="primary">导出 HTML</button>
@@ -149,24 +159,52 @@ export default function ContractDraftModule({ title, subtitle, apiBaseUrl }: Con
         </div>
       </header>
 
-      <div className="ai-contract-toolbar">
-        {toolbarButton("标题1", () => editor?.chain().focus().toggleHeading({ level: 1 }).run(), editor?.isActive("heading", { level: 1 }))}
-        {toolbarButton("标题2", () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), editor?.isActive("heading", { level: 2 }))}
-        {toolbarButton("标题3", () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), editor?.isActive("heading", { level: 3 }))}
-        {toolbarButton("加粗", () => editor?.chain().focus().toggleBold().run(), editor?.isActive("bold"))}
-        {toolbarButton("斜体", () => editor?.chain().focus().toggleItalic().run(), editor?.isActive("italic"))}
-        {toolbarButton("下划线", () => editor?.chain().focus().toggleUnderline().run(), editor?.isActive("underline"))}
-        {toolbarButton("有序列表", () => editor?.chain().focus().toggleOrderedList().run(), editor?.isActive("orderedList"))}
-        {toolbarButton("无序列表", () => editor?.chain().focus().toggleBulletList().run(), editor?.isActive("bulletList"))}
-        {toolbarButton("撤销", () => editor?.chain().focus().undo().run())}
-        {toolbarButton("重做", () => editor?.chain().focus().redo().run())}
+      <div className="ai-contract-surface">
+        <div className="ai-contract-toolbar">
+          <div className="ai-contract-toolbar__row">
+            <div className="ai-contract-toolbar__label">常用样式</div>
+            <div className="ai-contract-toolbar__group">
+              {toolbarButton("标题1", () => editor?.chain().focus().toggleHeading({ level: 1 }).run(), editor?.isActive("heading", { level: 1 }))}
+              {toolbarButton("标题2", () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), editor?.isActive("heading", { level: 2 }))}
+              {toolbarButton("标题3", () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), editor?.isActive("heading", { level: 3 }))}
+              {toolbarButton("加粗", () => editor?.chain().focus().toggleBold().run(), editor?.isActive("bold"))}
+              {toolbarButton("斜体", () => editor?.chain().focus().toggleItalic().run(), editor?.isActive("italic"))}
+              {toolbarButton("下划线", () => editor?.chain().focus().toggleUnderline().run(), editor?.isActive("underline"))}
+              {toolbarButton("有序列表", () => editor?.chain().focus().toggleOrderedList().run(), editor?.isActive("orderedList"))}
+              {toolbarButton("无序列表", () => editor?.chain().focus().toggleBulletList().run(), editor?.isActive("bulletList"))}
+              {toolbarButton("撤销", () => editor?.chain().focus().undo().run())}
+              {toolbarButton("重做", () => editor?.chain().focus().redo().run())}
+            </div>
+          </div>
+          <div className="ai-contract-toolbar__row ai-contract-toolbar__hint">
+            <span>Notion 式悬浮气泡已启用，选区会展示改写、扩写等 AI 操作。</span>
+          </div>
+        </div>
+
+        <div className="ai-contract-editor">
+          <EditorContent editor={editor} />
+        </div>
       </div>
 
       {editor && (
         <BubbleMenu className="ai-contract-bubble" tippyOptions={{ duration: 150 }} editor={editor} shouldShow={({ editor: ed }) => !ed.state.selection.empty}>
+          <div className="ai-contract-bubble__header">
+            <div>
+              <div className="ai-contract-bubble__title">AI 助手</div>
+              <p className="ai-contract-bubble__hint">灵感气泡 · 贴近 Notion 的悬浮体验</p>
+            </div>
+            <span className="ai-contract-bubble__status">选中内容</span>
+          </div>
+
           <div className="ai-contract-bubble__actions">
             {AI_ACTIONS.map((action) => (
-              <button key={action.id} type="button" onClick={() => applyAi(action.id)} disabled={aiPending}>
+              <button
+                key={action.id}
+                type="button"
+                onClick={() => applyAi(action.id)}
+                className="ai-contract-bubble__chip"
+                disabled={aiPending}
+              >
                 {action.label}
               </button>
             ))}
@@ -175,19 +213,20 @@ export default function ContractDraftModule({ title, subtitle, apiBaseUrl }: Con
                 type="text"
                 value={customInstruction}
                 onChange={(e) => setCustomInstruction(e.target.value)}
-                placeholder="自定义指令"
+                placeholder="更礼貌、更正式…"
               />
-              <button type="button" onClick={() => applyAi("custom")} disabled={aiPending}>
+              <button
+                type="button"
+                onClick={() => applyAi("custom")}
+                className="ai-contract-bubble__chip ai-contract-bubble__chip--primary"
+                disabled={aiPending}
+              >
                 自定义
               </button>
             </div>
           </div>
         </BubbleMenu>
       )}
-
-      <div className="ai-contract-editor">
-        <EditorContent editor={editor} />
-      </div>
 
       <section className="ai-contract-preview">
         <div>
