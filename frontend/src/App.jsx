@@ -7,11 +7,20 @@ import DocDiffDemo from "./modules/doc-diff/DocDiffDemo.jsx";
 import PlannedModule from "./modules/planned/PlannedModule.jsx";
 import ContractEditorDemo from "./modules/contract-editor-demo/ContractEditorDemo.jsx";
 import AiEditor from "./modules/ai-editor/AiEditor.jsx";
+import ContractDraftModule from "./modules/ai-contract-draft/ContractDraftModule.tsx";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001";
 
 const MODULES = [
+  {
+    id: "ai-contract-draft",
+    name: "AI 合同起草",
+    subtitle:
+      "Tiptap 合同编辑器，支持多级编号、占位符、气泡 AI 交互与 Markdown 互通。",
+    status: "ready",
+    component: ContractDraftModule,
+  },
   {
     id: "contract-editor",
     name: "合同导入编辑",
