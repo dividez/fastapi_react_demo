@@ -7,6 +7,7 @@ import json
 import re
 import unicodedata
 import uuid
+from datetime import datetime
 from collections import defaultdict
 from enum import Enum
 from typing import Annotated, AsyncGenerator, Literal
@@ -99,6 +100,24 @@ class ExportRequest(BaseModel):
     filename: str | None = None
 
 
+class AiEditorDocument(BaseModel):
+    id: str
+    title: str
+    markdown: str
+    updated_at: str
+
+
+class AiEditorDocumentPayload(BaseModel):
+    title: str
+    markdown: str
+
+
+class AiEditorExportRequest(BaseModel):
+    html: str
+    format: Literal["html", "docx", "pdf", "json"] = "html"
+    filename: str | None = None
+
+
 DIFF_TYPE_LABELS: dict[str, str] = {
     "insert": "新增",
     "delete": "删除",
@@ -111,6 +130,139 @@ class AiAction(str, Enum):
     REWRITE = "rewrite"
     EXPAND = "expand"
     CUSTOM = "custom"
+
+
+AI_EDITOR_MARKDOWN_TEMPLATE = """# 房屋租赁合同
+
+# 合同主体
+出租方：{{出租方名称|text|}}
+承租方：{{承租方名称|text|}}
+
+## 一、租赁房屋
+1.房屋地址：{{房屋地址|text|}}
+2.建筑面积：{{建筑面积|text|}}平方米
+3.房产证编号：{{房产证编号|text|}}
+4.房屋用途：居住
+
+## 二、租赁期限
+5.租赁期限为1年
+6.起租日：{{起租年份|text|}}年{{起租月份|text|}}月{{起租日|text|}}日
+7.到期日：{{到期年份|text|}}年{{到期月份|text|}}月{{到期日|text|}}日
+
+## 三、租金标准
+8.每月租金：{{月租金金额|text|}}元（含税）
+9.租金支付方式：季付
+10.首期租金支付时间：签约后3日内支付
+
+## 四、押金条款
+11.押金金额：1个月租金，计与月租金等额元
+
+## 五、费用承担
+12.出租方承担：房产税
+13.承租方承担：水电费
+
+## 六、房屋维护
+14.日常维修由承租方负责
+15.大修由出租方承担
+
+## 七、转租条款
+16.禁止转租
+
+## 八、续约条件
+17.租期届满前1个月提出书面申请
+
+## 九、违约责任
+18.逾期付款违约金：日0.05%
+19.其他违约情形：{{其他违约情形|text|}}
+
+## 十、合同解除
+20.无责解约权：{{无责解约权|text|}}
+21.其他解除条件：{{其他解除条件|text|}}
+
+## 十一、附件
+22.附件1 房屋交接清单
+23.附件2 房屋权属证明文件
+
+## 十二、签署条款
+24.本合同自双方签字盖章之日起生效
+
+# 附件1 房屋交接清单
+
+## 一、房屋现状确认
+1.房屋现状：{{房屋现状描述|text|}}
+
+## 二、设备设施清单
+2.设备设施清单：{{设备设施清单|text|}}
+
+## 三、钥匙交接记录
+3.钥匙交接记录：{{钥匙交接记录|text|}}
+
+## 四、水电表读数记录
+4.水电表读数记录：
+   - 水表读数：{{水表读数|text|}}
+   - 电表读数：{{电表读数|text|}}
+
+# 附件2 房屋权属证明文件
+
+## 一、房产证复印件
+1.房产证复印件：{{房产证复印件|text|}}
+
+## 二、出租方身份证明文件
+2.出租方身份证明文件：{{出租方身份证明文件|text|}}"""
+
+
+MOCK_AI_DOCUMENT = AiEditorDocument(
+    id="demo-ai-contract",
+    title="房屋租赁合同（Mock）",
+    markdown=AI_EDITOR_MARKDOWN_TEMPLATE,
+    updated_at=f"{datetime.utcnow().isoformat()}Z",
+)
+
+
+@app.get("/ai/editor/mock_document", response_model=AiEditorDocument)
+async def get_mock_ai_document() -> AiEditorDocument:
+    """Return a mock AI editor document for front-end bootstrap."""
+
+    return MOCK_AI_DOCUMENT
+
+
+@app.post("/ai/editor/mock_document", response_model=AiEditorDocument)
+async def save_mock_ai_document(
+    payload: AiEditorDocumentPayload,
+) -> AiEditorDocument:
+    """Persist the incoming markdown into the in-memory mock store."""
+
+    global MOCK_AI_DOCUMENT
+    now = f"{datetime.utcnow().isoformat()}Z"
+    updated = AiEditorDocument(
+        id=MOCK_AI_DOCUMENT.id or uuid.uuid4().hex,
+        title=payload.title.strip() or MOCK_AI_DOCUMENT.title,
+        markdown=payload.markdown,
+        updated_at=now,
+    )
+    MOCK_AI_DOCUMENT = updated
+    return updated
+
+
+@app.post("/ai/editor/export")
+async def export_ai_editor_document(
+    request: AiEditorExportRequest,
+) -> StreamingResponse:
+    """Export AI 编辑器内容，支持 HTML 直传或复用统一导出能力。"""
+
+    filename = _sanitize_filename(request.filename or MOCK_AI_DOCUMENT.title)
+
+    if request.format == "html":
+        html_bytes = request.html.encode("utf-8")
+        return _build_file_response(html_bytes, "text/html", f"{filename}.html")
+
+    return await export_document(
+        ExportRequest(
+            content=request.html,
+            format=request.format,  # type: ignore[arg-type]
+            filename=filename,
+        )
+    )
 
 
 def _format_sse(*, data: str, event: str | None = None, event_id: str | None = None) -> str:
