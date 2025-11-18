@@ -110,6 +110,7 @@ class AiAction(str, Enum):
     GENERATE = "generate"
     REWRITE = "rewrite"
     EXPAND = "expand"
+    CUSTOM = "custom"
 
 
 def _format_sse(*, data: str, event: str | None = None, event_id: str | None = None) -> str:
@@ -134,7 +135,7 @@ def _chunk_text(text: str, chunk_size: int = 48) -> list[str]:
     return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)] or [""]
 
 
-def _simulate_ai_response(action: AiAction, text: str) -> str:
+def _simulate_ai_response(action: AiAction, text: str, instruction: str = "") -> str:
     clean_text = text.strip()
     if not clean_text:
         return "请选择一段文本后再试。"
@@ -163,6 +164,13 @@ def _simulate_ai_response(action: AiAction, text: str) -> str:
             "以及必要的沟通机制，确保各项义务能够有效落实。"
         )
 
+    if action is AiAction.CUSTOM:
+        safe_instruction = instruction.strip() or "自定义指令"
+        return (
+            f"根据「{safe_instruction}」调整后的内容：{clean_text}，"
+            "在保持原意的基础上补充格式和细节，确保条款表述清晰可执行。"
+        )
+
     return clean_text
 
 
@@ -170,6 +178,7 @@ def _simulate_ai_response(action: AiAction, text: str) -> str:
 async def stream_ai_editor(
     action: AiAction,
     text: str = "",
+    instruction: str = "",
     request_id: str | None = None,
 ) -> StreamingResponse:
     """Stream AI results for the editor via SSE."""
@@ -183,6 +192,7 @@ async def stream_ai_editor(
             "requestId": resolved_request_id,
             "action": action.value,
             "receivedText": clean_text,
+            "instruction": instruction,
         }
         yield _format_sse(
             data=json.dumps(start_payload, ensure_ascii=False),
@@ -203,7 +213,7 @@ async def stream_ai_editor(
             )
             return
 
-        ai_result = _simulate_ai_response(action, clean_text)
+        ai_result = _simulate_ai_response(action, clean_text, instruction)
         chunks = _chunk_text(ai_result)
 
         for index, chunk in enumerate(chunks, start=1):
@@ -225,6 +235,7 @@ async def stream_ai_editor(
             "status": "completed",
             "result": ai_result,
             "totalChunks": len(chunks),
+            "meta": {"instruction": instruction},
         }
         yield _format_sse(
             data=json.dumps(done_payload, ensure_ascii=False),

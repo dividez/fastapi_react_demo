@@ -8,6 +8,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "@tiptap/markdown";
 import clsx from "clsx";
+import { PlaceholderMark } from "./extensions/placeholderMark";
 
 import "./ai-editor.css";
 
@@ -93,6 +94,7 @@ const AI_ACTIONS = [
   { id: "generate", label: "划句生成", description: "基于选中语句生成新的表述" },
   { id: "rewrite", label: "划句改写", description: "保持含义，优化措辞和语气" },
   { id: "expand", label: "划句扩写", description: "补充细节与背景说明" },
+  { id: "custom", label: "自定义指令", description: "输入偏好：更正式、更偏甲方等" },
 ];
 
 const toolbarItems = [
@@ -126,6 +128,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
   const [selectedClause, setSelectedClause] = useState({ heading: "", text: "" });
   const [aiRequests, setAiRequests] = useState([]);
   const [activeRequestId, setActiveRequestId] = useState("");
+  const [customInstruction, setCustomInstruction] = useState("更正式、条款编号自动衔接");
   const eventSourceRef = useRef({ source: null, requestId: null });
 
   const endpointBase = useMemo(() => {
@@ -182,6 +185,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
       Markdown.configure({
         transformPastedText: true,
       }),
+      PlaceholderMark,
     ],
     content: contractMarkdown,
     editorProps: {
@@ -231,11 +235,15 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
     [aiRequests]
   );
 
-  const triggerAi = (actionId) => {
+  const triggerAi = (actionId, instructionValue) => {
     if (!editor) return;
     closeEventSource();
     const selection = editor.state.selection;
     const text = editor.state.doc.textBetween(selection.from, selection.to, " ").trim();
+    const resolvedInstruction =
+      typeof instructionValue === "string" && instructionValue.length
+        ? instructionValue
+        : customInstruction;
     if (!text) {
       setAiRequests((prev) => [
         {
@@ -246,7 +254,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
           result: "请选择一段文本后再试。",
           range: { from: selection.from, to: selection.to },
           error: null,
-          meta: { clause: selectedClause },
+          meta: { clause: selectedClause, instruction: resolvedInstruction },
         },
         ...prev,
       ]);
@@ -262,7 +270,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
       result: "",
       range: { from: selection.from, to: selection.to },
       error: null,
-      meta: { clause: selectedClause },
+      meta: { clause: selectedClause, instruction: resolvedInstruction },
     };
     setAiRequests((prev) => [newRequest, ...prev]);
     setActiveRequestId(requestId);
@@ -271,6 +279,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
       action: actionId,
       text,
       request_id: requestId,
+      instruction: resolvedInstruction,
     });
     const endpoint = endpointBase
       ? `${endpointBase}/ai/editor/stream`
@@ -458,12 +467,32 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
                       type="button"
                       className="ai-editor__bubble-button"
                       onClick={() => triggerAi(action.id)}
-                      disabled={isAiBusy}
+                      disabled={
+                        isAiBusy || (action.id === "custom" && !customInstruction.trim())
+                      }
                     >
                       <span>{action.label}</span>
                       <small>{action.description}</small>
                     </button>
                   ))}
+                </div>
+                <div className="ai-editor__bubble-input">
+                  <label htmlFor="bubbleInstruction">自定义指令</label>
+                  <input
+                    id="bubbleInstruction"
+                    type="text"
+                    value={customInstruction}
+                    onChange={(event) => setCustomInstruction(event.target.value)}
+                    placeholder="例：更正式、补充违约责任"
+                  />
+                  <button
+                    type="button"
+                    className="ai-editor__bubble-primary"
+                    onClick={() => triggerAi("custom", customInstruction)}
+                    disabled={!customInstruction.trim() || isAiBusy}
+                  >
+                    发送自定义指令
+                  </button>
                 </div>
               </BubbleMenu>
             )}
@@ -481,7 +510,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
                   type="button"
                   className="ai-editor__assistant-button"
                   onClick={() => triggerAi(action.id)}
-                  disabled={!editor || isAiBusy}
+                  disabled={!editor || isAiBusy || (action.id === "custom" && !customInstruction.trim())}
                 >
                   <span className="ai-editor__assistant-button-title">{action.label}</span>
                   <span className="ai-editor__assistant-button-desc">{action.description}</span>
@@ -502,6 +531,11 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
                     {activeRequest?.meta?.clause?.text && (
                       <span className="ai-editor__assistant-clause">
                         条款范围：{activeRequest.meta.clause.heading || "未命名条款"}
+                      </span>
+                    )}
+                    {activeRequest?.meta?.instruction && (
+                      <span className="ai-editor__assistant-instruction">
+                        指令：{activeRequest.meta.instruction}
                       </span>
                     )}
                   </div>
@@ -531,6 +565,26 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
                     >
                       应用到文档
                     </button>
+                    <div className="ai-editor__instruction">
+                      <label htmlFor="instructionInput">自定义指令</label>
+                      <textarea
+                        id="instructionInput"
+                        value={customInstruction}
+                        onChange={(event) => setCustomInstruction(event.target.value)}
+                        placeholder="更正式、更偏甲方视角、补充风险等"
+                        rows={2}
+                      />
+                      <div className="ai-editor__instruction-actions">
+                        <button
+                          type="button"
+                          className="ai-editor__assistant-button ai-editor__assistant-button--ghost"
+                          onClick={() => triggerAi("custom")}
+                          disabled={!editor || isAiBusy || !customInstruction.trim()}
+                        >
+                          发送自定义指令
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </>
               ) : (
