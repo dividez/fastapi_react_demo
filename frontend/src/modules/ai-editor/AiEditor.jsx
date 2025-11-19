@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
@@ -9,6 +9,11 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "@tiptap/markdown";
 import clsx from "clsx";
 import { PlaceholderMark } from "./extensions/placeholderMark";
+import {
+  exportMockDocument,
+  fetchMockDocument,
+  saveMockDocument,
+} from "./api";
 
 import "./ai-editor.css";
 
@@ -129,12 +134,47 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
   const [aiRequests, setAiRequests] = useState([]);
   const [activeRequestId, setActiveRequestId] = useState("");
   const [customInstruction, setCustomInstruction] = useState("更正式、条款编号自动衔接");
+  const [documentMeta, setDocumentMeta] = useState(null);
+  const [loadingDocument, setLoadingDocument] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState("");
+  const [statusMessage, setStatusMessage] = useState("已载入默认 Markdown 模板。");
   const eventSourceRef = useRef({ source: null, requestId: null });
 
   const endpointBase = useMemo(() => {
     if (!apiBaseUrl) return "";
     return apiBaseUrl.replace(/\/$/, "");
   }, [apiBaseUrl]);
+
+  const safeTitle = useMemo(
+    () => documentMeta?.title?.trim() || "AI 智能写作合同",
+    [documentMeta],
+  );
+
+  const loadMockDocument = useCallback(async () => {
+    if (!editor) return;
+
+    setLoadingDocument(true);
+    setStatusMessage("正在从后端 Mock 拉取 Markdown…");
+
+    try {
+      const payload = await fetchMockDocument(endpointBase);
+      editor.commands.setContent(payload.markdown || contractMarkdown, false);
+      setDocumentMeta({
+        id: payload.id,
+        title: payload.title,
+        updatedAt: payload.updated_at,
+      });
+      setStatusMessage("Mock 合同已载入，可直接开始编辑。");
+    } catch (error) {
+      console.warn("加载 Mock 合同失败", error);
+      editor.commands.setContent(contractMarkdown, false);
+      setDocumentMeta(null);
+      setStatusMessage(error?.message || "加载失败，已回退默认模板。");
+    } finally {
+      setLoadingDocument(false);
+    }
+  }, [editor, endpointBase]);
 
   const closeEventSource = () => {
     if (eventSourceRef.current?.source) {
@@ -188,6 +228,7 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
       PlaceholderMark,
     ],
     content: contractMarkdown,
+    contentType: "markdown",
     editorProps: {
       attributes: {
         class: "ai-editor__tiptap",
@@ -200,6 +241,11 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
       setSelectedClause(getClauseContext(instance));
     },
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    loadMockDocument();
+  }, [editor, loadMockDocument]);
 
   useEffect(() => {
     if (!editor) return undefined;
@@ -233,6 +279,64 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
         ["loading", "streaming"].includes(item.status)
       ),
     [aiRequests]
+  );
+
+  const handleSaveMock = useCallback(async () => {
+    if (!editor) return;
+
+    setSaving(true);
+    setStatusMessage("正在保存到 Mock 后端…");
+
+    try {
+      const markdown = editor.getMarkdown ? editor.getMarkdown() : editor.getText();
+      const payload = await saveMockDocument(endpointBase, {
+        title: safeTitle,
+        markdown,
+      });
+      setDocumentMeta({
+        id: payload.id,
+        title: payload.title,
+        updatedAt: payload.updated_at,
+      });
+      setStatusMessage("Mock 保存成功，已同步最新 Markdown。");
+    } catch (error) {
+      console.warn("保存 Mock 合同失败", error);
+      setStatusMessage(error?.message || "保存失败，请稍后再试。");
+    } finally {
+      setSaving(false);
+    }
+  }, [editor, endpointBase, safeTitle]);
+
+  const handleExport = useCallback(
+    async (format) => {
+      if (!editor) return;
+
+      setExportingFormat(format);
+      setStatusMessage(`正在导出 ${format.toUpperCase()}…`);
+
+      try {
+        const html = editor.getHTML();
+        const { blob, filename } = await exportMockDocument(endpointBase, {
+          html,
+          format,
+          filename: safeTitle,
+        });
+
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        setStatusMessage(`已导出 ${filename}`);
+      } catch (error) {
+        console.warn("导出失败", error);
+        setStatusMessage(error?.message || "导出失败，请重试。");
+      } finally {
+        setExportingFormat("");
+      }
+    },
+    [editor, endpointBase, safeTitle],
   );
 
   const triggerAi = (actionId, instructionValue) => {
@@ -419,6 +523,48 @@ export default function AiEditor({ title, subtitle, apiBaseUrl }) {
         <div>
           <h1>{title}</h1>
           <p className="page__subtitle">{subtitle}</p>
+        </div>
+        <div className="ai-editor__header-actions">
+          <div className="ai-editor__status">
+            <span>{statusMessage}</span>
+            {documentMeta?.updatedAt && (
+              <em>更新于：{documentMeta.updatedAt}</em>
+            )}
+          </div>
+          <div className="ai-editor__cta-group">
+            <button
+              type="button"
+              className="ai-editor__ghost"
+              onClick={loadMockDocument}
+              disabled={!editor || loadingDocument}
+            >
+              {loadingDocument ? "载入中…" : "载入 Mock 合同"}
+            </button>
+            <button
+              type="button"
+              className="ai-editor__primary"
+              onClick={handleSaveMock}
+              disabled={!editor || saving}
+            >
+              {saving ? "保存中…" : "保存到 Mock 后端"}
+            </button>
+            <button
+              type="button"
+              className="ai-editor__ghost"
+              onClick={() => handleExport("html")}
+              disabled={!editor || !!exportingFormat}
+            >
+              {exportingFormat === "html" ? "导出中…" : "导出 HTML"}
+            </button>
+            <button
+              type="button"
+              className="ai-editor__ghost"
+              onClick={() => handleExport("docx")}
+              disabled={!editor || !!exportingFormat}
+            >
+              {exportingFormat === "docx" ? "导出中…" : "导出 DOCX"}
+            </button>
+          </div>
         </div>
       </header>
 
