@@ -8,11 +8,20 @@ import PlannedModule from "./modules/planned/PlannedModule.jsx";
 import ContractEditorDemo from "./modules/contract-editor-demo/ContractEditorDemo.jsx";
 import AiEditor from "./modules/ai-editor/AiEditor.jsx";
 import ContractDraftModule from "./modules/ai-contract-draft/ContractDraftModule.tsx";
+import SmartEditor from "./modules/smart-editor/SmartEditor.jsx";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001";
 
 const MODULES = [
+  {
+    id: "smart-editor",
+    name: "SmartEditor React 版",
+    subtitle:
+      "参考 Vue 示例的三栏布局与交互：工具栏操作、章节导航、右侧 AI 插入建议。",
+    status: "ready",
+    component: SmartEditor,
+  },
   {
     id: "ai-contract-draft",
     name: "AI 合同起草",
