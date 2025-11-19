@@ -1,14 +1,21 @@
 .ai-contract-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .ai-contract-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: stretch;
+  gap: 18px;
+  background: radial-gradient(circle at 20% 20%, rgba(79, 70, 229, 0.1), transparent 40%),
+    radial-gradient(circle at 80% 0%, rgba(56, 189, 248, 0.14), transparent 42%),
+    #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
 }
 
 .ai-contract-header h1 {
@@ -17,7 +24,7 @@
 }
 
 .ai-contract-header .subtitle {
-  color: #666;
+  color: #475569;
 }
 
 .ai-contract-header .badge {
@@ -28,6 +35,49 @@
   border-radius: 999px;
   font-weight: 600;
   font-size: 12px;
+}
+
+.ai-contract-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-contract-hero__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-contract-hero .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(14, 165, 233, 0.14);
+  color: #0ea5e9;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.ai-contract-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.ai-contract-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px dashed #e2e8f0;
 }
 
 .ai-contract-actions button {
@@ -51,37 +101,91 @@
   border-color: #2563eb;
 }
 
+.ai-contract-surface {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px 14px 18px;
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .ai-contract-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 80%);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.ai-contract-toolbar__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ai-contract-toolbar__label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.ai-contract-toolbar__group {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
+.ai-contract-toolbar__hint {
+  color: #475569;
+  font-size: 13px;
+  padding: 4px 0 2px 2px;
+}
+
 .ai-contract-toolbar__btn {
   padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
   cursor: pointer;
   background: #fff;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.2s ease,
+    background 0.2s ease;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  font-weight: 600;
 }
 
 .ai-contract-toolbar__btn.is-active {
   background: #eef2ff;
   color: #4338ca;
   border-color: #c7d2fe;
+  box-shadow: 0 10px 24px rgba(67, 56, 202, 0.2);
+}
+
+.ai-contract-toolbar__btn:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
 }
 
 .ai-contract-editor {
-  border: 1px solid #e4e4e7;
-  border-radius: 12px;
-  padding: 12px;
-  background: #fff;
-  min-height: 420px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  background: linear-gradient(180deg, #fcfcfd 0%, #f8fafc 60%, #ffffff 100%);
+  min-height: 460px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 18px 46px rgba(15, 23, 42, 0.08);
 }
 
 .ai-contract-editor__content {
   outline: none;
-  min-height: 380px;
+  min-height: 400px;
+  font-size: 15px;
+  color: #0f172a;
+  line-height: 1.75;
 }
 
 .ai-contract-heading {
@@ -124,34 +228,95 @@
 }
 
 .ai-contract-bubble {
+  min-width: 360px;
+  max-width: 480px;
   display: flex;
-  gap: 8px;
-  align-items: center;
-  background: #0f172a;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 12px;
+  flex-direction: column;
+  gap: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.2);
 }
 
-.ai-contract-bubble button {
-  background: #22c55e;
-  color: #fff;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 8px;
+.ai-contract-bubble__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.ai-contract-bubble__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ai-contract-bubble__hint {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.ai-contract-bubble__status {
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-radius: 10px;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.ai-contract-bubble__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-contract-bubble__chip {
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  padding: 8px 12px;
+  border-radius: 12px;
   cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s ease, transform 0.12s ease, border-color 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.ai-contract-bubble__chip:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  transform: translateY(-1px);
+}
+
+.ai-contract-bubble__chip--primary {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  border-color: #5b21b6;
+}
+
+.ai-contract-bubble__chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .ai-contract-bubble__custom {
-  display: flex;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
   align-items: center;
 }
 
 .ai-contract-bubble__custom input {
-  border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  padding: 8px 10px;
+  background: #ffffff;
 }
 
 .ai-contract-preview {
