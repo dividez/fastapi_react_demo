@@ -350,6 +350,248 @@
   font-weight: 600;
 }
 
+/* Enhanced Bilingual Editor with Tiptap */
+.bilingual-editor--enhanced .bilingual-column__body {
+  padding: 20px;
+}
+
+.bilingual-tiptap {
+  font-family: "Noto Serif SC", "Times New Roman", "Songti SC", serif;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #1f2430;
+  outline: none;
+}
+
+.bilingual-tiptap--source {
+  font-family: "Noto Serif SC", "Times New Roman", "Songti SC", serif;
+}
+
+.bilingual-tiptap--target {
+  font-family: "Georgia", "Times New Roman", serif;
+}
+
+.bilingual-tiptap p {
+  margin: 0 0 14px;
+  line-height: 1.8;
+}
+
+.bilingual-tiptap p:last-child {
+  margin-bottom: 0;
+}
+
+.bilingual-tiptap h1,
+.bilingual-tiptap h2,
+.bilingual-tiptap h3,
+.bilingual-tiptap h4,
+.bilingual-tiptap h5,
+.bilingual-tiptap h6 {
+  font-family: "Source Han Serif SC", "SimHei", "Microsoft YaHei", sans-serif;
+  font-weight: 600;
+  margin: 24px 0 16px;
+  color: #192135;
+  line-height: 1.4;
+}
+
+.bilingual-tiptap h1:first-child,
+.bilingual-tiptap h2:first-child,
+.bilingual-tiptap h3:first-child,
+.bilingual-tiptap h4:first-child,
+.bilingual-tiptap h5:first-child,
+.bilingual-tiptap h6:first-child {
+  margin-top: 0;
+}
+
+.bilingual-tiptap strong {
+  font-weight: 700;
+  color: #11162c;
+}
+
+.bilingual-tiptap em {
+  font-style: italic;
+  color: #293861;
+}
+
+.bilingual-tiptap a {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.bilingual-tiptap ul,
+.bilingual-tiptap ol {
+  margin: 0 0 14px;
+  padding-left: 2.5em;
+  line-height: 1.8;
+}
+
+.bilingual-tiptap li {
+  margin: 6px 0;
+}
+
+.bilingual-tiptap blockquote {
+  border-left: 3px solid rgba(30, 45, 80, 0.2);
+  margin: 18px 0;
+  padding-left: 20px;
+  color: #4c5862;
+  font-style: italic;
+}
+
+.bilingual-tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+.bilingual-tiptap table td,
+.bilingual-tiptap table th {
+  border: 1px solid rgba(30, 45, 80, 0.2);
+  padding: 8px 12px;
+  vertical-align: top;
+  line-height: 1.6;
+}
+
+.bilingual-tiptap table th {
+  background: rgba(36, 80, 255, 0.08);
+  font-weight: 600;
+}
+
+.bilingual-tiptap hr {
+  border: none;
+  border-top: 1px solid rgba(30, 45, 80, 0.2);
+  margin: 24px 0;
+}
+
+/* Paragraph-level alignment highlighting (浅色背景框) */
+.bilingual-tiptap [data-align-id] {
+  position: relative;
+  transition: background-color 0.2s ease;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 4px -4px;
+  box-sizing: border-box;
+}
+
+.bilingual-tiptap [data-align-id].bilingual-alignment--active {
+  background-color: rgba(36, 80, 255, 0.12);
+  outline: 1px solid rgba(36, 80, 255, 0.2);
+  outline-offset: -1px;
+}
+
+.bilingual-tiptap [data-align-id]:hover {
+  background-color: rgba(36, 80, 255, 0.05);
+}
+
+/* 列表项高亮时，整个列表也高亮 */
+.bilingual-tiptap ol.bilingual-alignment--active,
+.bilingual-tiptap ul.bilingual-alignment--active {
+  background-color: rgba(36, 80, 255, 0.06);
+  border-radius: 6px;
+  outline: 1px solid rgba(36, 80, 255, 0.15);
+  outline-offset: -1px;
+  box-sizing: border-box;
+}
+
+/* 多级列表支持 */
+.bilingual-tiptap ol ol.bilingual-alignment--active,
+.bilingual-tiptap ul ul.bilingual-alignment--active,
+.bilingual-tiptap ol ul.bilingual-alignment--active,
+.bilingual-tiptap ul ol.bilingual-alignment--active {
+  background-color: rgba(36, 80, 255, 0.08);
+}
+
+/* HTML标签级别的精确联动 */
+.bilingual-tiptap .bilingual-tag {
+  position: relative;
+  transition: background-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.bilingual-tiptap .bilingual-tag.bilingual-tag--active {
+  background-color: rgba(36, 80, 255, 0.2);
+  outline: 2px solid rgba(36, 80, 255, 0.3);
+  outline-offset: -2px;
+  animation: bilingual-tag-pulse 1.2s ease-in-out;
+}
+
+@keyframes bilingual-tag-pulse {
+  0%, 100% {
+    background-color: rgba(36, 80, 255, 0.2);
+    outline-width: 2px;
+    outline-color: rgba(36, 80, 255, 0.3);
+  }
+  50% {
+    background-color: rgba(36, 80, 255, 0.25);
+    outline-width: 3px;
+    outline-color: rgba(36, 80, 255, 0.4);
+  }
+}
+
+.bilingual-tiptap .bilingual-tag:hover {
+  background-color: rgba(36, 80, 255, 0.12);
+  cursor: pointer;
+}
+
+/* 内联标签（strong, em, span等）的样式 */
+.bilingual-tiptap strong.bilingual-tag,
+.bilingual-tiptap em.bilingual-tag,
+.bilingual-tiptap b.bilingual-tag,
+.bilingual-tiptap i.bilingual-tag,
+.bilingual-tiptap u.bilingual-tag,
+.bilingual-tiptap a.bilingual-tag,
+.bilingual-tiptap span.bilingual-tag,
+.bilingual-tiptap code.bilingual-tag,
+.bilingual-tiptap mark.bilingual-tag,
+.bilingual-tiptap del.bilingual-tag,
+.bilingual-tiptap ins.bilingual-tag,
+.bilingual-tiptap sub.bilingual-tag,
+.bilingual-tiptap sup.bilingual-tag {
+  border-radius: 3px;
+  padding: 2px 4px;
+  margin: 0 1px;
+  display: inline;
+}
+
+/* 块级标签（p, li, h1-h6, blockquote等）的样式 */
+.bilingual-tiptap p.bilingual-tag,
+.bilingual-tiptap li.bilingual-tag,
+.bilingual-tiptap blockquote.bilingual-tag,
+.bilingual-tiptap h1.bilingual-tag,
+.bilingual-tiptap h2.bilingual-tag,
+.bilingual-tiptap h3.bilingual-tag,
+.bilingual-tiptap h4.bilingual-tag,
+.bilingual-tiptap h5.bilingual-tag,
+.bilingual-tiptap h6.bilingual-tag,
+.bilingual-tiptap div.bilingual-tag,
+.bilingual-tiptap section.bilingual-tag,
+.bilingual-tiptap article.bilingual-tag {
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: 2px 0;
+  display: block;
+}
+
+.bilingual-tiptap p.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap li.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap blockquote.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap h1.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap h2.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap h3.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap h4.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap h5.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap h6.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap div.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap section.bilingual-tag.bilingual-tag--active,
+.bilingual-tiptap article.bilingual-tag.bilingual-tag--active {
+  background-color: rgba(36, 80, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(36, 80, 255, 0.25);
+}
+
+/* 确保段落和标签联动时都显示 */
+.bilingual-tiptap [data-align-id].bilingual-alignment--active .bilingual-tag.bilingual-tag--active {
+  background-color: rgba(36, 80, 255, 0.25);
+}
+
 @media (max-width: 960px) {
   .bilingual-editor {
     padding: 20px;

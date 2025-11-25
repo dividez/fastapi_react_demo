@@ -3,6 +3,7 @@ import clsx from "clsx";
 import WordPreview from "./modules/word-preview/WordPreview.jsx";
 import ContractEditor from "./modules/contract-editor/ContractEditor.jsx";
 import BilingualEditor from "./modules/bilingual/BilingualEditor.jsx";
+import EnhancedBilingualEditor from "./modules/bilingual/EnhancedBilingualEditor.jsx";
 import DocDiffDemo from "./modules/doc-diff/DocDiffDemo.jsx";
 import PlannedModule from "./modules/planned/PlannedModule.jsx";
 import ContractEditorDemo from "./modules/contract-editor-demo/ContractEditorDemo.jsx";
@@ -60,6 +61,13 @@ const MODULES = [
     subtitle: "双栏对照展示合同译文，支持联动高亮、译文替换与段落插入。",
     status: "ready",
     component: BilingualEditor,
+  },
+  {
+    id: "enhanced-bilingual-editor",
+    name: "增强版双栏对照（Tiptap）",
+    subtitle: "基于 Tiptap 的精确联动翻译对照，支持段落和句子级别的实时高亮与滚动同步。",
+    status: "ready",
+    component: EnhancedBilingualEditor,
   },
   {
     id: "doc-diff",
