@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    container_name: fastapi-react-backend
+    environment:
+      - ONLYOFFICE_DOCUMENT_SERVER_URL=http://onlyoffice
+      - ONLYOFFICE_DOCSERVER_PUBLIC_URL=http://localhost:8085
+      - ONLYOFFICE_PUBLIC_BASE_URL=http://backend:8001
+    ports:
+      - "8001:8001"
+    depends_on:
+      - onlyoffice
+    volumes:
+      - onlyoffice_data:/app/app/storage/onlyoffice
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+    container_name: fastapi-react-frontend
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8001
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  onlyoffice:
+    image: onlyoffice/documentserver:8.1
+    container_name: onlyoffice-documentserver
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+    environment:
+      - JWT_ENABLED=false
+
+volumes:
+  onlyoffice_data:

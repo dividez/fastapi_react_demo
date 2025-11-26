@@ -37,3 +37,16 @@ VITE_API_BASE_URL=http://your-api-host:8000
 ```
 
 启动后上传 Word 合同文件即可在页面中预览正文内容，查看标题层级、段落排版、列表、多级编号及表格等常规格式。
+
+### 使用 Docker（集成 OnlyOffice 在线编辑）
+
+```bash
+cd docker
+docker compose up --build
+```
+
+- 前端：<http://localhost:5173>
+- 后端 API：<http://localhost:8001>
+- OnlyOffice Document Server：<http://localhost:8085>
+
+Docker 方案会自动启动 OnlyOffice 文档服务，上传 Word/Excel/PPT 文件即可在页面中以精简 UI 模式进行在线编辑。

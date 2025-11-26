@@ -1,0 +1,80 @@
+.onlyoffice-hint {
+  margin-top: 8px;
+  color: #6b7280;
+}
+
+.onlyoffice-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.onlyoffice-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.onlyoffice-panel--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.onlyoffice-editor-box {
+  margin-top: 12px;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+  min-height: 540px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.onlyoffice-editor {
+  width: 100%;
+  height: 700px;
+  min-height: 540px;
+  border: 0;
+}
+
+.onlyoffice-empty {
+  height: 540px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #475569;
+}
+
+.onlyoffice-empty__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.onlyoffice-empty__tips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+  max-width: 520px;
+}
+
+.onlyoffice-list {
+  list-style: disc;
+  padding-left: 18px;
+  color: #475569;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 1200px) {
+  .onlyoffice-grid {
+    grid-template-columns: 1fr;
+  }
+}
