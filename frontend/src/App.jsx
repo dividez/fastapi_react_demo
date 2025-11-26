@@ -11,11 +11,20 @@ import AiEditor from "./modules/ai-editor/AiEditor.jsx";
 import ContractDraftModule from "./modules/ai-contract-draft/ContractDraftModule.tsx";
 import SmartEditor from "./modules/smart-editor/SmartEditor.jsx";
 import ContractDesensitize from "./modules/contract-desensitize/ContractDesensitize.jsx";
+import OnlyOfficeEditor from "./modules/onlyoffice/OnlyOfficeEditor.jsx";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001";
 
 const MODULES = [
+  {
+    id: "onlyoffice",
+    name: "OnlyOffice 在线编辑",
+    subtitle:
+      "上传 Word/Excel/PPT，调用 OnlyOffice 文档服务以精简 UI 方式在 iframe 中编辑。",
+    status: "ready",
+    component: OnlyOfficeEditor,
+  },
   {
     id: "smart-editor",
     name: "SmartEditor React 版",

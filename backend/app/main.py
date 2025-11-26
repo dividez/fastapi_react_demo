@@ -5,12 +5,16 @@ import base64
 import html
 import io
 import json
+import os
 import re
+import time
 import unicodedata
 import uuid
+import urllib.request
 import zipfile
 from collections import defaultdict
 from enum import Enum
+from pathlib import Path
 from typing import Annotated, AsyncGenerator, Literal
 from urllib.parse import quote
 
@@ -21,9 +25,9 @@ from docx import Document
 from docx.shared import Pt
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -57,6 +61,19 @@ SUPPORTED_MIME_TYPES = {
 }
 
 WORD_FILE_MIME_TYPES = SUPPORTED_MIME_TYPES | {"application/msword"}
+
+BASE_DIR = Path(__file__).resolve().parent
+ONLYOFFICE_STORAGE_DIR = BASE_DIR / "storage" / "onlyoffice"
+ONLYOFFICE_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+DOCUMENT_SERVER_INTERNAL = os.getenv(
+    "ONLYOFFICE_DOCUMENT_SERVER_URL", "http://localhost:8085"
+)
+DOCUMENT_SERVER_PUBLIC = os.getenv(
+    "ONLYOFFICE_DOCSERVER_PUBLIC_URL", DOCUMENT_SERVER_INTERNAL
+)
+ONLYOFFICE_BACKEND_BASE = os.getenv("ONLYOFFICE_PUBLIC_BASE_URL")
+SUPPORTED_ONLYOFFICE_EXTENSIONS = {"docx", "doc", "pptx", "xlsx"}
 
 
 class ConversionNote(BaseModel):
@@ -819,6 +836,105 @@ def _build_file_response(data: bytes, media_type: str, filename: str) -> Streami
     return response
 
 
+def _ensure_onlyoffice_file(file_id: str) -> Path:
+    file_path = ONLYOFFICE_STORAGE_DIR / file_id
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="文件不存在或已被删除。")
+    return file_path
+
+
+def _resolve_backend_base(request: Request) -> str:
+    if ONLYOFFICE_BACKEND_BASE:
+        return ONLYOFFICE_BACKEND_BASE.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+async def _persist_onlyoffice_upload(file: UploadFile) -> tuple[str, str]:
+    filename = (file.filename or "").strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="请上传有效的文件。")
+
+    extension = Path(filename).suffix.lower().lstrip(".")
+    if extension not in SUPPORTED_ONLYOFFICE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="暂不支持该文件类型，请上传 Office 文档。")
+
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", Path(filename).name) or f"document.{extension}"
+    file_id = f"{uuid.uuid4().hex}_{safe_name}"
+
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="文件内容为空，请重新上传。")
+
+    target_path = ONLYOFFICE_STORAGE_DIR / file_id
+    target_path.write_bytes(contents)
+    return file_id, safe_name
+
+
+def _build_onlyoffice_config(file_id: str, display_name: str, request: Request) -> dict[str, object]:
+    file_path = _ensure_onlyoffice_file(file_id)
+    file_type = Path(display_name).suffix.lstrip(".") or "docx"
+
+    if file_type in {"xlsx"}:
+        document_type = "spreadsheet"
+    elif file_type in {"pptx"}:
+        document_type = "presentation"
+    else:
+        document_type = "word"
+
+    base_url = _resolve_backend_base(request)
+    file_url = f"{base_url}/onlyoffice/files/{file_id}"
+    callback_url = f"{base_url}/onlyoffice/callback/{file_id}"
+
+    last_modified = int(file_path.stat().st_mtime) if file_path.exists() else int(time.time())
+    return {
+        "document": {
+            "fileType": file_type,
+            "title": display_name,
+            "key": f"{file_id}-{last_modified}",
+            "url": file_url,
+            "permissions": {
+                "comment": False,
+                "download": True,
+                "edit": True,
+                "print": True,
+                "review": False,
+            },
+        },
+        "documentType": document_type,
+        "editorConfig": {
+            "mode": "edit",
+            "callbackUrl": callback_url,
+            "lang": "zh-CN",
+            "user": {
+                "id": "contract-user",
+                "name": "合同协作用户",
+            },
+            "customization": {
+                "autosave": True,
+                "compactHeader": True,
+                "compactToolbar": True,
+                "hideRightMenu": True,
+                "leftMenu": False,
+                "rightMenu": False,
+                "toolbarHideFileName": True,
+                "toolbarNoTabs": True,
+                "feedback": False,
+                "help": False,
+                "chat": False,
+                "comments": False,
+                "zoom": 100,
+                "showReviewChanges": False,
+            },
+        },
+    }
+
+
+def _download_onlyoffice_update(download_url: str, target_path: Path) -> None:
+    with urllib.request.urlopen(download_url) as response:
+        data = response.read()
+    target_path.write_bytes(data)
+
+
 def _markdown_to_blocks(markdown: str) -> list[dict[str, object]]:
     blocks: list[dict[str, object]] = []
     lines = (markdown or "").splitlines()
@@ -1570,6 +1686,54 @@ def export_docx(payload: MarkdownPayload) -> StreamingResponse:
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename=filename,
     )
+
+
+@app.post("/onlyoffice/upload")
+async def upload_onlyoffice(
+    request: Request,
+    file: Annotated[UploadFile, File(description="Office 文件")],
+) -> dict[str, object]:
+    file_id, display_name = await _persist_onlyoffice_upload(file)
+    config = _build_onlyoffice_config(file_id, display_name, request)
+    return {
+        "fileId": file_id,
+        "config": config,
+        "documentServerUrl": DOCUMENT_SERVER_PUBLIC,
+    }
+
+
+@app.get("/onlyoffice/config/{file_id}")
+async def onlyoffice_config(file_id: str, request: Request) -> dict[str, object]:
+    file_path = _ensure_onlyoffice_file(file_id)
+    display_name = file_path.name.split("_", 1)[1] if "_" in file_path.name else file_path.name
+    config = _build_onlyoffice_config(file_id, display_name, request)
+    return {
+        "fileId": file_id,
+        "config": config,
+        "documentServerUrl": DOCUMENT_SERVER_PUBLIC,
+    }
+
+
+@app.get("/onlyoffice/files/{file_id}")
+def onlyoffice_file(file_id: str) -> FileResponse:
+    file_path = _ensure_onlyoffice_file(file_id)
+    return FileResponse(file_path)
+
+
+@app.post("/onlyoffice/callback/{file_id}")
+async def onlyoffice_callback(file_id: str, request: Request) -> dict[str, int]:
+    file_path = _ensure_onlyoffice_file(file_id)
+    payload = await request.json()
+    status = int(payload.get("status", 0))
+    download_url = payload.get("url") or payload.get("changesurl")
+
+    if status in {2, 3, 6} and download_url:
+        try:
+            _download_onlyoffice_update(download_url, file_path)
+        except Exception:
+            return {"error": 1}
+
+    return {"error": 0}
 
 
 @app.get("/health")
