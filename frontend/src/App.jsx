@@ -10,6 +10,7 @@ import ContractEditorDemo from "./modules/contract-editor-demo/ContractEditorDem
 import AiEditor from "./modules/ai-editor/AiEditor.jsx";
 import ContractDraftModule from "./modules/ai-contract-draft/ContractDraftModule.tsx";
 import SmartEditor from "./modules/smart-editor/SmartEditor.jsx";
+import ContractDesensitize from "./modules/contract-desensitize/ContractDesensitize.jsx";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001";
@@ -22,6 +23,14 @@ const MODULES = [
       "参考 Vue 示例的三栏布局与交互：工具栏操作、章节导航、右侧 AI 插入建议。",
     status: "ready",
     component: SmartEditor,
+  },
+  {
+    id: "contract-desensitize",
+    name: "合同脱敏",
+    subtitle:
+      "上传 Word 合同，自动识别企业身份、联系方式、项目标识等敏感字段并输出脱敏版。",
+    status: "ready",
+    component: ContractDesensitize,
   },
   {
     id: "ai-contract-draft",

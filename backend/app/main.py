@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import html
 import io
 import json
 import re
 import unicodedata
 import uuid
+import zipfile
 from collections import defaultdict
 from enum import Enum
 from typing import Annotated, AsyncGenerator, Literal
@@ -54,6 +56,8 @@ SUPPORTED_MIME_TYPES = {
     "application/octet-stream",  # some browsers fallback
 }
 
+WORD_FILE_MIME_TYPES = SUPPORTED_MIME_TYPES | {"application/msword"}
+
 
 class ConversionNote(BaseModel):
     type: str
@@ -99,6 +103,21 @@ class ExportRequest(BaseModel):
     content: str
     format: Literal["docx", "pdf", "json"]
     filename: str | None = None
+
+
+class SensitiveHit(BaseModel):
+    category: str
+    field: str
+    value: str
+    count: int
+
+
+class DesensitizeResponse(BaseModel):
+    sanitized_docx: str
+    filename: str
+    total_hits: int
+    hits: list[SensitiveHit] = []
+    sanitized_preview: str | None = None
 
 
 DIFF_TYPE_LABELS: dict[str, str] = {
@@ -380,6 +399,262 @@ def _truncate_text(value: str, limit: int = 80) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 1] + "…"
+
+
+def _mask_value(value: str) -> str:
+    if not value:
+        return ""
+
+    masked = []
+    for char in value:
+        if char.isspace():
+            masked.append(char)
+        elif char.isdigit():
+            masked.append("•")
+        elif char.isalpha():
+            masked.append("*")
+        elif _is_cjk_char(char):
+            masked.append("＊")
+        else:
+            masked.append("※")
+    return "".join(masked) or "＊"
+
+
+def _mask_text_with_map(text: str, mask_map: dict[str, str]) -> str:
+    if not text or not mask_map:
+        return text
+
+    sanitized = text
+    for raw, masked in sorted(mask_map.items(), key=lambda item: len(item[0]), reverse=True):
+        sanitized = re.sub(re.escape(raw), masked, sanitized)
+    return sanitized
+
+
+def _collect_docx_text(raw_bytes: bytes) -> str:
+    try:
+        document = Document(io.BytesIO(raw_bytes))
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=400, detail="无法读取合同内容，请确认文件是否为有效的 Word 文档") from exc
+
+    texts: list[str] = []
+    for paragraph in document.paragraphs:
+        if paragraph.text:
+            texts.append(paragraph.text)
+
+    for table in document.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                if cell.text:
+                    texts.append(cell.text)
+
+    return "\n".join(texts)
+
+
+def _find_sensitive_hits(text: str) -> list[SensitiveHit]:
+    hit_map: dict[tuple[str, str], SensitiveHit] = {}
+
+    for config in SENSITIVE_FIELD_CONFIGS:
+        patterns: list[PatternGroup] = config.get("patterns", [])  # type: ignore[assignment]
+        for pattern, group_index in patterns:
+            for match in pattern.finditer(text):
+                try:
+                    value = match.group(group_index) if group_index else match.group(0)
+                except IndexError:  # pragma: no cover - defensive
+                    value = match.group(0)
+
+                cleaned_value = value.strip()
+                if not cleaned_value:
+                    continue
+
+                key = (str(config["field"]), cleaned_value)
+                if key not in hit_map:
+                    hit_map[key] = SensitiveHit(
+                        category=str(config["category"]),
+                        field=str(config["field"]),
+                        value=cleaned_value,
+                        count=1,
+                    )
+                else:
+                    hit_map[key].count += 1
+
+    return sorted(hit_map.values(), key=lambda hit: (hit.category, hit.field, hit.value))
+
+
+def _sanitize_docx_bytes(docx_bytes: bytes, mask_map: dict[str, str]) -> bytes:
+    if not mask_map:
+        return docx_bytes
+
+    input_buffer = io.BytesIO(docx_bytes)
+    output_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(input_buffer, "r") as source_zip, zipfile.ZipFile(
+        output_buffer, "w"
+    ) as target_zip:
+        for item in source_zip.infolist():
+            data = source_zip.read(item.filename)
+            if item.filename.endswith(".xml"):
+                xml_text = data.decode("utf-8")
+                masked_text = _mask_text_with_map(xml_text, mask_map)
+                data = masked_text.encode("utf-8")
+            target_zip.writestr(item, data)
+
+    return output_buffer.getvalue()
+
+
+async def _read_word_file_bytes(file: UploadFile) -> tuple[bytes, str]:
+    filename = (file.filename or "合同.docx").strip()
+    lowered = filename.lower()
+
+    if not lowered.endswith((".docx", ".doc")):
+        raise HTTPException(status_code=400, detail="仅支持上传 .doc 或 .docx 合同文件")
+
+    if file.content_type not in WORD_FILE_MIME_TYPES:
+        raise HTTPException(status_code=400, detail="不支持的文件类型")
+
+    raw_bytes = await file.read()
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="上传文件为空")
+
+    if lowered.endswith(".doc"):
+        raise HTTPException(status_code=400, detail="暂不支持 .doc，请先转为 .docx 后再试")
+
+    return raw_bytes, filename
+
+
+PatternGroup = tuple[re.Pattern[str], int]
+
+
+SENSITIVE_FIELD_CONFIGS: list[dict[str, object]] = [
+    {
+        "category": "主体身份信息",
+        "field": "企业名称",
+        "patterns": [
+            (
+                re.compile(
+                    r"[\u4e00-\u9fa5A-Za-z0-9（）()·]{2,}(?:有限责任公司|股份有限公司|有限公司|集团|公司|合伙企业|工作室|事务所)"
+                ),
+                0,
+            ),
+        ],
+    },
+    {
+        "category": "人名",
+        "field": "人名",
+        "patterns": [(re.compile(r"(?<![\w])[\u4e00-\u9fa5]{2,4}(?:先生|女士)?"), 0)],
+    },
+    {
+        "category": "主体身份信息",
+        "field": "身份证号",
+        "patterns": [
+            (
+                re.compile(
+                    r"\b\d{6}(?:19|20)?\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[0-9Xx]\b"
+                ),
+                0,
+            )
+        ],
+    },
+    {
+        "category": "联系方式",
+        "field": "联系电话",
+        "patterns": [
+            (
+                re.compile(r"\b1[3-9]\d{9}\b"),
+                0,
+            ),
+            (
+                re.compile(r"\b0\d{2,3}-?\d{7,8}\b"),
+                0,
+            ),
+        ],
+    },
+    {
+        "category": "联系方式",
+        "field": "邮箱",
+        "patterns": [(re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"), 0)],
+    },
+    {
+        "category": "地址",
+        "field": "地址",
+        "patterns": [
+            (
+                re.compile(
+                    r"[\u4e00-\u9fa5A-Za-z0-9]{2,}(?:省|市|自治区|区|县|镇|乡|街道|大道|路|街|巷|号)[\u4e00-\u9fa5A-Za-z0-9#\-（）()]{2,40}"
+                ),
+                0,
+            )
+        ],
+    },
+    {
+        "category": "企业注册信息",
+        "field": "统一社会信用代码",
+        "patterns": [(re.compile(r"\b[0-9A-Z]{18}\b"), 0)],
+    },
+    {
+        "category": "企业注册信息",
+        "field": "法定代表人",
+        "patterns": [(re.compile(r"法定代表人[:：]?\s*([\u4e00-\u9fa5]{2,4})"), 1)],
+    },
+    {
+        "category": "银行与税务信息",
+        "field": "银行账户",
+        "patterns": [(re.compile(r"\b\d{12,24}\b"), 0)],
+    },
+    {
+        "category": "银行与税务信息",
+        "field": "开户银行",
+        "patterns": [
+            (
+                re.compile(r"[\u4e00-\u9fa5A-Za-z]{2,}(?:银行|信用社|合作社)[\u4e00-\u9fa5A-Za-z]*"),
+                0,
+            )
+        ],
+    },
+    {
+        "category": "银行与税务信息",
+        "field": "纳税人识别号",
+        "patterns": [(re.compile(r"\b[0-9A-Z]{15,20}\b"), 0)],
+    },
+    {
+        "category": "合同与项目标识",
+        "field": "合同编号",
+        "patterns": [(re.compile(r"合同编号[:：]?\s*([A-Za-z0-9\-]{4,})"), 1)],
+    },
+    {
+        "category": "合同与项目标识",
+        "field": "项目名称",
+        "patterns": [
+            (
+                re.compile(r"项目名称[:：]?\s*([\u4e00-\u9fa5A-Za-z0-9（）()·\-]{2,})"),
+                1,
+            )
+        ],
+    },
+    {
+        "category": "时间信息",
+        "field": "日期",
+        "patterns": [
+            (
+                re.compile(r"\b\d{4}年\d{1,2}月\d{1,2}日\b"),
+                0,
+            ),
+            (
+                re.compile(r"\b\d{4}-\d{1,2}-\d{1,2}\b"),
+                0,
+            ),
+        ],
+    },
+    {
+        "category": "时间段",
+        "field": "时间段",
+        "patterns": [
+            (
+                re.compile(r"\b\d{4}年\d{1,2}月\d{1,2}日\s*[至\-]+\s*\d{4}年\d{1,2}月\d{1,2}日\b"),
+                0,
+            )
+        ],
+    },
+]
 
 
 EXPORT_BLOCK_TAGS: tuple[str, ...] = (
@@ -1168,6 +1443,30 @@ def _build_diff(
     )
 
     return diff_html, stats, diff_items, highlighted_original, highlighted_modified
+
+
+@app.post("/api/contract/desensitize", response_model=DesensitizeResponse)
+async def desensitize_contract(
+    file: Annotated[UploadFile, File(description="合同 .doc/.docx 文件")]
+) -> DesensitizeResponse:
+    raw_bytes, filename = await _read_word_file_bytes(file)
+    plain_text = _collect_docx_text(raw_bytes)
+    hits = _find_sensitive_hits(plain_text)
+
+    mask_map = {hit.value: _mask_value(hit.value) for hit in hits if hit.value}
+    sanitized_bytes = _sanitize_docx_bytes(raw_bytes, mask_map)
+    sanitized_preview = _mask_text_with_map(plain_text, mask_map) if plain_text else None
+
+    encoded_file = base64.b64encode(sanitized_bytes).decode("utf-8")
+    safe_name = _sanitize_filename(filename.rsplit(".", 1)[0]) or "合同"
+
+    return DesensitizeResponse(
+        sanitized_docx=encoded_file,
+        filename=f"{safe_name}_脱敏.docx",
+        total_hits=sum(hit.count for hit in hits),
+        hits=hits,
+        sanitized_preview=sanitized_preview,
+    )
 
 
 @app.post("/convert", response_model=ConversionResponse)
