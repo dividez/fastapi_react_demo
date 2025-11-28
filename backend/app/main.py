@@ -28,7 +28,8 @@ from docx.oxml.ns import qn
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from openai import OpenAI
+from pydantic import BaseModel, Field
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
@@ -161,6 +162,188 @@ class AiAction(str, Enum):
     CUSTOM = "custom"
 
 
+RISK_DIMENSION_DEFINITIONS: dict[str, str] = {
+    "DUTY_OBLIGATION_MATCH": "权利义务匹配，关注上下游责任、义务是否一致及可传递。",
+    "LIQUIDATED_DAMAGES": "违约金条款，包括违约情形、计算方式、上限等。",
+    "SETTLEMENT_CYCLE": "结算周期与付款条件，关注账期差异和回款风险。",
+    "LIABILITY_ASSUMPTION": "责任承担主体及范围，是否存在我方单方兜底。",
+    "LIABILITY_LIMITATION": "责任限制与赔偿上限，检查是否倒挂或缺失。",
+    "EXEMPTION_CLAUSE": "免责条款，是否可对等适用于上下游。",
+    "INSURANCE_BENEFICIARY": "保险受益人设置是否与风险主体一致。",
+    "INSURANCE_AMOUNT_DEDUCTIBLE": "保险保额与免赔额是否足以覆盖下游承诺。",
+    "WARRANTY_PERIOD": "质量保修期及责任期限。",
+    "RETENTION_REFUND": "质保金留存与返还条件。",
+    "PRICE_ADJUSTMENT": "价格调整机制及触发条件。",
+    "SERVICE_EVALUATION": "服务评价与考核指标，关联违约或费用扣减。",
+}
+
+
+class RiskClause(BaseModel):
+    id: str | None = None
+    text: str
+    heading_path: list[str] | None = None
+
+
+class RiskDimensionPayload(BaseModel):
+    dimension_code: str
+    upstream_clauses: list[RiskClause] = Field(default_factory=list)
+    downstream_clauses: list[RiskClause] = Field(default_factory=list)
+    context_summary: str | None = None
+
+
+class RiskTransferRequest(BaseModel):
+    dimensions: list[RiskDimensionPayload]
+    model: str = "gpt-4o-mini"
+    temperature: float = 0.2
+    language: Literal["zh", "en"] = "zh"
+
+
+class RiskTransferItem(BaseModel):
+    dimension_code: str
+    severity: Literal["high", "medium", "low"]
+    risk_transfer_status: Literal[
+        "fully_transferred", "partially_transferred", "not_transferred", "inverted"
+    ]
+    risk_type: str
+    explanation: str
+    suggestion: str
+    matched_upstream_clause_ids: list[str] = Field(default_factory=list)
+    matched_downstream_clause_ids: list[str] = Field(default_factory=list)
+
+
+class RiskTransferResponse(BaseModel):
+    items: list[RiskTransferItem]
+
+
+class RiskTransferAnalyzer:
+    def __init__(
+        self,
+        *,
+        client: OpenAI,
+        model: str = "gpt-4o-mini",
+        temperature: float = 0.2,
+        language: str = "zh",
+    ) -> None:
+        self.client = client
+        self.model = model
+        self.temperature = temperature
+        self.language = language
+
+    async def analyze(self, payload: RiskTransferRequest) -> list[RiskTransferItem]:
+        results: list[RiskTransferItem] = []
+        for dimension in payload.dimensions:
+            results.append(await self._analyze_dimension(dimension))
+        return results
+
+    async def _analyze_dimension(self, dimension: RiskDimensionPayload) -> RiskTransferItem:
+        messages = self._build_messages(dimension)
+
+        def _call_openai() -> str:
+            completion = self.client.chat.completions.create(
+                model=self.model,
+                temperature=self.temperature,
+                response_format={"type": "json_object"},
+                messages=messages,
+            )
+            return completion.choices[0].message.content or "{}"
+
+        try:
+            content = await asyncio.to_thread(_call_openai)
+        except Exception as exc:  # pragma: no cover - depends on network credentials
+            raise HTTPException(
+                status_code=502,
+                detail="Failed to call OpenAI for risk transfer analysis",
+            ) from exc
+
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+            raise HTTPException(
+                status_code=500,
+                detail="Unable to parse OpenAI response for risk transfer analysis",
+            ) from exc
+
+        return RiskTransferItem(
+            dimension_code=dimension.dimension_code,
+            severity=payload.get("severity", "medium"),
+            risk_transfer_status=payload.get(
+                "risk_transfer_status", "partially_transferred"
+            ),
+            risk_type=payload.get("risk_type", "unspecified"),
+            explanation=payload.get("explanation", ""),
+            suggestion=payload.get("suggestion", ""),
+            matched_upstream_clause_ids=payload.get("matched_upstream_clause_ids", []),
+            matched_downstream_clause_ids=payload.get("matched_downstream_clause_ids", []),
+        )
+
+    def _build_messages(self, dimension: RiskDimensionPayload) -> list[dict[str, object]]:
+        dimension_label = RISK_DIMENSION_DEFINITIONS.get(
+            dimension.dimension_code, "其他风险维度"
+        )
+        language_hint = "请使用中文输出。" if self.language == "zh" else "Please respond in English."
+        system_prompt = f"""
+你是资深的上下游合同风险审核专家，专注判断风险能否顺利从下游向上游转嫁。
+输出要求：
+- 仅输出 JSON，不要添加多余文字。
+- severity 取值：high / medium / low。
+- risk_transfer_status 取值：fully_transferred / partially_transferred / not_transferred / inverted。
+- 解释中要直接指出上下游差异、倒挂或缺失点，并给出可执行的修改建议。
+
+十二个固定维度编码及释义：
+{json.dumps(RISK_DIMENSION_DEFINITIONS, ensure_ascii=False, indent=2)}
+{language_hint}
+""".strip()
+
+        def _format_clause(clause: RiskClause, index: int) -> dict[str, str | list[str] | None]:
+            return {
+                "id": clause.id or f"c-{index}",
+                "text": clause.text,
+                "heading_path": clause.heading_path,
+            }
+
+        upstream = [_format_clause(clause, idx) for idx, clause in enumerate(dimension.upstream_clauses, 1)]
+        downstream = [
+            _format_clause(clause, idx) for idx, clause in enumerate(dimension.downstream_clauses, 1)
+        ]
+
+        user_payload = {
+            "task": "risk_transfer_assessment",
+            "dimension_code": dimension.dimension_code,
+            "dimension_label": dimension_label,
+            "context_summary": dimension.context_summary,
+            "upstream_clauses": upstream,
+            "downstream_clauses": downstream,
+            "expected_fields": {
+                "severity": "high/medium/low",
+                "risk_transfer_status": "fully_transferred/partially_transferred/not_transferred/inverted",
+                "risk_type": "简短的风险标签，如 liability_cap_mismatch、missing_insurance 等",
+                "explanation": "200 字以内，指出风险原因、责任链断点、条款缺失或倒挂。",
+                "suggestion": "150 字以内，提供可执行的修改建议。",
+                "matched_upstream_clause_ids": "引用上游条款 id 列表，用于前端高亮。",
+                "matched_downstream_clause_ids": "引用下游条款 id 列表，用于前端高亮。",
+            },
+        }
+
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False, indent=2)},
+        ]
+
+
+def _get_openai_client() -> OpenAI:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="OPENAI_API_KEY is required to run risk transfer analysis.",
+        )
+
+    base_url = os.getenv("OPENAI_BASE_URL")
+    if base_url:
+        return OpenAI(api_key=api_key, base_url=base_url)
+    return OpenAI(api_key=api_key)
+
+
 def _format_sse(*, data: str, event: str | None = None, event_id: str | None = None) -> str:
     """Format payload in SSE wire format."""
 
@@ -220,6 +403,22 @@ def _simulate_ai_response(action: AiAction, text: str, instruction: str = "") ->
         )
 
     return clean_text
+
+
+@app.post("/api/risk-transfer/analyze", response_model=RiskTransferResponse)
+async def analyze_risk_transfer(request: RiskTransferRequest) -> RiskTransferResponse:
+    """Call OpenAI to judge whether risks are transferred across upstream/downstream contracts."""
+
+    client = _get_openai_client()
+    analyzer = RiskTransferAnalyzer(
+        client=client,
+        model=request.model,
+        temperature=request.temperature,
+        language=request.language,
+    )
+
+    items = await analyzer.analyze(request)
+    return RiskTransferResponse(items=items)
 
 
 @app.get("/ai/editor/stream")
