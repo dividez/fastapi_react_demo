@@ -33,6 +33,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
+from app.api.v1.routes_contract_parser import router as contract_parser_router
+
 app = FastAPI(title="Word to Tiptap Converter")
 
 app.add_middleware(
@@ -42,6 +44,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(contract_parser_router)
 
 STYLE_MAP = """
 paragraph[style-name='Title'] => h1:fresh
